@@ -1,0 +1,12 @@
+id = "modelica"
+name = "Modelica"
+version = "0.0.1"
+schema_version = 1
+authors = ["Antoine Gautier <agautier@solamen.fr>"]
+description = "Highlighting for Modelica language"
+repository = "https://github.com/AntoineGautier/modelica"
+languages = ["languages/modelica"]
+
+[grammars.modelica]
+repository = "https://github.com/AntoineGautier/tree-sitter-modelica"
+commit = "c3ea96184c7defdafeb257174925434531a9188e"

@@ -9,4 +9,4 @@ languages = ["languages/modelica"]
 
 [grammars.modelica]
 repository = "https://github.com/AntoineGautier/tree-sitter-modelica"
-commit = "c3ea96184c7defdafeb257174925434531a9188e"
+commit = "b3897ecd85267d2f1b3a6029881a91ffb2b35a27"

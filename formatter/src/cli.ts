@@ -143,7 +143,7 @@ async function run() {
       console.log('')
       console.log('--- Formatted Output ---')
       console.log('')
-      console.log(formatted)
+      process.stdout.write(formatted)
     }
 
   } catch (error) {

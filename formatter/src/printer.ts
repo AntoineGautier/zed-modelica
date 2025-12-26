@@ -61,10 +61,10 @@ function isGraphicalPrimitiveContext(path: AstPath<ASTNode>): boolean {
     // or for annotation_clause
     const parent = path.getParentNode(0)
     if (!parent) return false
-    
+
     // Direct parent is annotation_clause
     if (parent.type === 'annotation_clause') return true
-    
+
     // Parent is modification inside element_modification
     if (parent.type === 'modification') {
       const grandparent = path.getParentNode(1)
@@ -74,7 +74,7 @@ function isGraphicalPrimitiveContext(path: AstPath<ASTNode>): boolean {
         if (GRAPHICAL_PRIMITIVE_NAMES.has(modName)) return true
       }
     }
-    
+
     // Parent is element_modification directly
     if (parent.type === 'element_modification') {
       const nameChild = parent.children.find(c => c.type === 'name')
@@ -158,7 +158,7 @@ export const printModelica: Printer<ASTNode>['print'] = (
     case 'long_class_specifier': {
       const parts: Doc[] = []
       let className = ''
-      
+
       for (let i = 0; i < node.children.length; i++) {
         const child = node.children[i]
         if (child.type === 'IDENT' && !className) {
@@ -166,11 +166,11 @@ export const printModelica: Printer<ASTNode>['print'] = (
           parts.push(className)
         } else if (child.type === 'description_string') {
           parts.push(indent([line, path.call(print, 'children', i)]))
-        } else if (child.type === 'element_list' || 
+        } else if (child.type === 'element_list' ||
                    child.type === 'public_element_list' ||
                    child.type === 'protected_element_list') {
           parts.push(indent([line, path.call(print, 'children', i)]))
-        } else if (child.type === 'equation_section' || 
+        } else if (child.type === 'equation_section' ||
                    child.type === 'algorithm_section') {
           parts.push(hardline, path.call(print, 'children', i))
         } else if (child.type === 'annotation_clause') {
@@ -179,7 +179,7 @@ export const printModelica: Printer<ASTNode>['print'] = (
           parts.push(hardline, path.call(print, 'children', i))
         }
       }
-      
+
       parts.push(hardline, 'end ', className, ';')
       return group(parts)
     }
@@ -187,7 +187,7 @@ export const printModelica: Printer<ASTNode>['print'] = (
     case 'short_class_specifier': {
       // Format: IDENT = type_specifier [class_modification] [description_string]
       const parts: Doc[] = []
-      
+
       for (let i = 0; i < node.children.length; i++) {
         const child = node.children[i]
         if (child.type === 'IDENT') {
@@ -241,7 +241,7 @@ export const printModelica: Printer<ASTNode>['print'] = (
       if (prefix) {
         parts.push(prefix, ' ')
       }
-      
+
       for (let i = 0; i < node.children.length; i++) {
         const child = node.children[i]
         if (child.type === 'component_clause') {
@@ -284,13 +284,13 @@ export const printModelica: Printer<ASTNode>['print'] = (
     // ===========================================
     case 'component_clause': {
       const parts: Doc[] = []
-      
+
       // Extract prefix keywords (parameter, constant, etc.) before type_specifier
       const prefix = extractComponentClausePrefix(node)
       if (prefix) {
         parts.push(prefix, ' ')
       }
-      
+
       for (let i = 0; i < node.children.length; i++) {
         const child = node.children[i]
         if (child.type === 'type_specifier') {
@@ -361,7 +361,7 @@ export const printModelica: Printer<ASTNode>['print'] = (
       // Top-level assignments get spaces around =, attribute bindings don't
       const parent = path.getParentNode()
       const isTopLevelAssignment = parent?.type === 'declaration'
-      
+
       for (let i = 0; i < node.children.length; i++) {
         const child = node.children[i]
         if (child.type === 'class_modification') {
@@ -389,36 +389,21 @@ export const printModelica: Printer<ASTNode>['print'] = (
       if (node.children.length === 0) {
         return '()'
       }
-      
+
       const args = path.map(print, 'children')
       const inAnnotation = isInsideAnnotation(path)
-      
-      // Check if this is a nested class_modification inside an annotation
-      // (e.g., annotation(Dialog(...)) - Dialog's class_modification is nested)
-      // Only skip extra indent when inside annotation AND parent element_modification
-      // has a name that's not a graphical primitive (those have their own handling)
-      const parent = path.getParentNode()
-      const grandparent = path.getParentNode(1)
-      const isNestedInAnnotation = inAnnotation && 
-        parent?.type === 'modification' && 
-        grandparent?.type === 'element_modification'
-      
+
       if (inAnnotation) {
-        // In annotations, use fill to pack as many attributes as possible per line
-        // fill expects alternating: [item, separator, item, separator, ...]
-        // where separator uses 'line' which becomes space when flat, newline when broken
-        const fillItems: Doc[] = []
-        for (let i = 0; i < args.length; i++) {
-          if (i > 0) {
-            // Separator between items: comma + line (space when flat, newline when breaking)
-            fillItems.push([',', line])
-          }
-          fillItems.push(args[i])
-        }
-        
-        // For graphical primitives and annotation, don't add newline after opening paren
+        // For graphical primitives, use fill to pack attributes
         const isGraphicalContext = isGraphicalPrimitiveContext(path)
         if (isGraphicalContext) {
+          const fillItems: Doc[] = []
+          for (let i = 0; i < args.length; i++) {
+            if (i > 0) {
+              fillItems.push([',', line])
+            }
+            fillItems.push(args[i])
+          }
           // No softline after '(' - content starts on same line
           // No softline before ')' - closing paren stays on last content line
           return group([
@@ -427,17 +412,42 @@ export const printModelica: Printer<ASTNode>['print'] = (
             ')'
           ])
         }
+
+        // Check if this is a top-level annotation class_modification
+        const parent = path.getParentNode()
+        const isTopLevelAnnotation = parent?.type === 'annotation_clause'
+
+        // For all annotation class_modifications (top-level and nested),
+        // use fill to pack attributes on same line until max length.
+        // Only indent once at the top level to avoid cumulative indentation
+        // when multiple opening constructs are packed on same line.
+        const fillItems: Doc[] = []
+        for (let i = 0; i < args.length; i++) {
+          if (i > 0) {
+            fillItems.push([',', line])
+          }
+          fillItems.push(args[i])
+        }
         
-        // fill will pack as many items as fit on each line
-        // No softline before ')' - closing paren on same line as last attribute
-        // Avoid extra indent if nested in annotation (like Dialog inside annotation)
-        return group([
-          '(',
-          isNestedInAnnotation ? [softline, fill(fillItems)] : indent([softline, fill(fillItems)]),
-          ')'
-        ])
+        if (isTopLevelAnnotation) {
+          // Top-level annotation: add indent for line breaks
+          return group([
+            '(',
+            indent(fill(fillItems)),
+            ')'
+          ])
+        } else {
+          // Nested class_modifications (like transformation inside Placement):
+          // Don't add additional indent - just use fill directly
+          // This prevents cumulative indentation when constructs are nested
+          return group([
+            '(',
+            fill(fillItems),
+            ')'
+          ])
+        }
       }
-      
+
       // Normal formatting with line breaks
       // No softline before ')' - closing paren on same line as last attribute
       return group([
@@ -471,11 +481,11 @@ export const printModelica: Printer<ASTNode>['print'] = (
       if (prefix) {
         parts.push(prefix, ' ')
       }
-      
+
       // Check if this is a graphical primitive inside an annotation
       const inAnnotation = isInsideAnnotation(path)
       const isGraphical = isGraphicalPrimitive(node)
-      
+
       if (inAnnotation && isGraphical) {
         // For graphical primitives in annotations, use normalized compact text
         // only if it fits within reasonable line length
@@ -486,7 +496,7 @@ export const printModelica: Printer<ASTNode>['print'] = (
         }
         // Otherwise fall through to normal formatting with indentation
       }
-      
+
       for (let i = 0; i < node.children.length; i++) {
         const child = node.children[i]
         if (child.type === 'name') {
@@ -507,7 +517,7 @@ export const printModelica: Printer<ASTNode>['print'] = (
       // Extract 'redeclare' and optionally 'final', 'each' from node.text
       const prefix = extractRedeclarePrefix(node)
       const parts: Doc[] = [prefix, ' ']
-      
+
       for (let i = 0; i < node.children.length; i++) {
         const child = node.children[i]
         if (child.type === 'short_class_definition' || child.type === 'class_definition') {
@@ -520,7 +530,7 @@ export const printModelica: Printer<ASTNode>['print'] = (
     case 'component_redeclaration': {
       const prefix = extractRedeclarePrefix(node)
       const parts: Doc[] = [prefix, ' ']
-      
+
       for (let i = 0; i < node.children.length; i++) {
         const child = node.children[i]
         if (child.type === 'component_clause') {
@@ -551,7 +561,7 @@ export const printModelica: Printer<ASTNode>['print'] = (
       // Check if this is an initial equation section by looking at the node text
       const isInitial = (node.text ?? '').trimStart().startsWith('initial')
       const content: Doc[] = []
-      
+
       for (let i = 0; i < node.children.length; i++) {
         const child = node.children[i]
         if (child.type === 'equation_list') {
@@ -561,7 +571,7 @@ export const printModelica: Printer<ASTNode>['print'] = (
           content.push(path.call(print, 'children', i))
         }
       }
-      
+
       parts.push(isInitial ? 'initial equation' : 'equation')
       if (content.length > 0) {
         parts.push(indent([line, join(hardline, content)]))
@@ -574,10 +584,10 @@ export const printModelica: Printer<ASTNode>['print'] = (
 
     case 'simple_equation': {
       // Handle equation with two expressions and = between them
-      const exprChildren = node.children.filter(c => 
+      const exprChildren = node.children.filter(c =>
         c.type === 'simple_expression' || c.type === 'expression'
       )
-      
+
       if (exprChildren.length === 2) {
         const result: Doc[] = []
         let firstExprDone = false
@@ -595,7 +605,7 @@ export const printModelica: Printer<ASTNode>['print'] = (
         result.push(';')
         return group(result)
       }
-      
+
       // Fallback for single expression equations
       const parts: Doc[] = []
       for (let i = 0; i < node.children.length; i++) {
@@ -614,7 +624,7 @@ export const printModelica: Printer<ASTNode>['print'] = (
       const parts: Doc[] = ['connect(']
       const args: Doc[] = []
       let hasAnnotation = false
-      
+
       for (let i = 0; i < node.children.length; i++) {
         const child = node.children[i]
         if (child.type === 'component_reference') {
@@ -626,7 +636,7 @@ export const printModelica: Printer<ASTNode>['print'] = (
           parts.push(line, path.call(print, 'children', i), ';')
         }
       }
-      
+
       if (!hasAnnotation) {
         parts.push(join(', ', args), ');')
       }
@@ -637,7 +647,7 @@ export const printModelica: Printer<ASTNode>['print'] = (
     case 'for_statement': {
       const parts: Doc[] = ['for ']
       const body: Doc[] = []
-      
+
       for (let i = 0; i < node.children.length; i++) {
         const child = node.children[i]
         if (child.type === 'for_indices') {
@@ -646,7 +656,7 @@ export const printModelica: Printer<ASTNode>['print'] = (
           body.push(path.call(print, 'children', i))
         }
       }
-      
+
       parts.push(indent([line, ...body]))
       parts.push(hardline, 'end for;')
       return group(parts)
@@ -672,14 +682,14 @@ export const printModelica: Printer<ASTNode>['print'] = (
     case 'if_statement': {
       const parts: Doc[] = ['if ']
       let inElse = false
-      
+
       for (let i = 0; i < node.children.length; i++) {
         const child = node.children[i]
         if (child.type === 'expression' && !inElse) {
           parts.push(path.call(print, 'children', i), ' then')
         } else if (child.type === 'equation_list' || child.type === 'statement_list') {
           parts.push(indent([line, path.call(print, 'children', i)]))
-        } else if (child.type === 'else_if_equation_clause_list' || 
+        } else if (child.type === 'else_if_equation_clause_list' ||
                    child.type === 'else_if_statement_clause_list') {
           parts.push(hardline, path.call(print, 'children', i))
         } else if (child.text === 'else') {
@@ -687,7 +697,7 @@ export const printModelica: Printer<ASTNode>['print'] = (
           parts.push(hardline, 'else')
         }
       }
-      
+
       parts.push(hardline, 'end if;')
       return group(parts)
     }
@@ -699,7 +709,7 @@ export const printModelica: Printer<ASTNode>['print'] = (
     case 'else_if_equation_clause':
     case 'else_if_statement_clause': {
       const parts: Doc[] = ['elseif ']
-      
+
       for (let i = 0; i < node.children.length; i++) {
         const child = node.children[i]
         if (child.type === 'expression') {
@@ -714,7 +724,7 @@ export const printModelica: Printer<ASTNode>['print'] = (
     case 'when_equation':
     case 'when_statement': {
       const parts: Doc[] = ['when ']
-      
+
       for (let i = 0; i < node.children.length; i++) {
         const child = node.children[i]
         if (child.type === 'expression') {
@@ -726,7 +736,7 @@ export const printModelica: Printer<ASTNode>['print'] = (
           parts.push(hardline, path.call(print, 'children', i))
         }
       }
-      
+
       parts.push(hardline, 'end when;')
       return group(parts)
     }
@@ -738,7 +748,7 @@ export const printModelica: Printer<ASTNode>['print'] = (
     case 'else_when_equation_clause':
     case 'else_when_statement_clause': {
       const parts: Doc[] = ['elsewhen ']
-      
+
       for (let i = 0; i < node.children.length; i++) {
         const child = node.children[i]
         if (child.type === 'expression') {
@@ -762,7 +772,7 @@ export const printModelica: Printer<ASTNode>['print'] = (
       // Check if this is an initial algorithm section by looking at the node text
       const isInitial = (node.text ?? '').trimStart().startsWith('initial')
       const content: Doc[] = []
-      
+
       for (let i = 0; i < node.children.length; i++) {
         const child = node.children[i]
         if (child.type === 'statement_list') {
@@ -771,7 +781,7 @@ export const printModelica: Printer<ASTNode>['print'] = (
           content.push(path.call(print, 'children', i))
         }
       }
-      
+
       parts.push(isInitial ? 'initial algorithm' : 'algorithm')
       if (content.length > 0) {
         parts.push(indent([line, join(hardline, content)]))
@@ -785,7 +795,7 @@ export const printModelica: Printer<ASTNode>['print'] = (
     case 'assignment_statement': {
       const parts: Doc[] = []
       let hasRef = false
-      
+
       for (let i = 0; i < node.children.length; i++) {
         const child = node.children[i]
         if (child.type === 'component_reference') {
@@ -813,7 +823,7 @@ export const printModelica: Printer<ASTNode>['print'] = (
     case 'while_statement': {
       const parts: Doc[] = ['while ']
       const body: Doc[] = []
-      
+
       for (let i = 0; i < node.children.length; i++) {
         const child = node.children[i]
         if (child.type === 'expression') {
@@ -822,7 +832,7 @@ export const printModelica: Printer<ASTNode>['print'] = (
           body.push(path.call(print, 'children', i))
         }
       }
-      
+
       parts.push(indent([line, ...body]))
       parts.push(hardline, 'end while;')
       return group(parts)
@@ -830,7 +840,7 @@ export const printModelica: Printer<ASTNode>['print'] = (
 
     case 'multiple_output_function_application_statement': {
       const parts: Doc[] = ['(']
-      
+
       for (let i = 0; i < node.children.length; i++) {
         const child = node.children[i]
         if (child.type === 'output_expression_list') {
@@ -839,7 +849,7 @@ export const printModelica: Printer<ASTNode>['print'] = (
           parts.push(') := ', path.call(print, 'children', i))
         }
       }
-      
+
       parts.push(';')
       return parts
     }
@@ -853,12 +863,12 @@ export const printModelica: Printer<ASTNode>['print'] = (
             case 'if_expression': {
       const children = node.children
       let childIdx = 0
-      
+
       // Check if this is a simple if-then-else that can fit on one line
       const nodeText = node.text ?? ''
       const hasElseIf = children.some(c => c.type === 'else_if_clause')
       const isSimple = !hasElseIf && nodeText.length < 80
-      
+
       if (isSimple) {
         // Format simple if-then-else as flat - no internal breaks
         const condition = children[0] ? path.call(print, 'children', 0) : ''
@@ -866,24 +876,24 @@ export const printModelica: Printer<ASTNode>['print'] = (
         const elseExpr = children[2] ? path.call(print, 'children', 2) : ''
         return ['if ', condition, ' then ', thenExpr, ' else ', elseExpr]
       }
-      
+
       // Collect all parts for proper grouping and line breaking
       const conditionParts: Doc[] = []
       const thenParts: Doc[] = []
       const elseParts: Doc[] = []
-      
+
       // First child is condition
       if (children[childIdx]) {
         conditionParts.push(path.call(print, 'children', childIdx))
         childIdx++
       }
-      
+
       // Then expression (after 'then')
       if (children[childIdx]) {
         thenParts.push(path.call(print, 'children', childIdx))
         childIdx++
       }
-      
+
       // Handle elseif clauses and else expression
       while (childIdx < children.length) {
         const child = children[childIdx]
@@ -895,7 +905,7 @@ export const printModelica: Printer<ASTNode>['print'] = (
         }
         childIdx++
       }
-      
+
       // Format with proper line breaking support
       // then/else aligned with if keyword (no indent)
       return group([
@@ -912,7 +922,7 @@ export const printModelica: Printer<ASTNode>['print'] = (
       const conditionParts: Doc[] = []
       const thenParts: Doc[] = []
       let seenCondition = false
-      
+
       for (let i = 0; i < node.children.length; i++) {
         if (!seenCondition) {
           conditionParts.push(path.call(print, 'children', i))
@@ -943,14 +953,74 @@ export const printModelica: Printer<ASTNode>['print'] = (
         const leftChild = node.children[0]
         const rightChild = node.children[1]
         const operator = extractOperator(node.text ?? '', leftChild, rightChild)
-        
-        // Logical operators (and/or) break with indent for if clause conditions
+
+        // Logical operators (and/or) - flatten SAME operator only
+        // to avoid cascading indentation in conditions like:
+        //   if a and b and c
+        // Should become:
+        //   if a and
+        //     b and
+        //     c
+        // Not:
+        //   if a and
+        //     b and
+        //       c
+        // Note: 'and' and 'or' have different precedence, so we only
+        // flatten the same operator (and with and, or with or)
         if (operator === 'and' || operator === 'or') {
-          return group([
-            path.call(print, 'children', 0),
-            ' ', operator,
-            indent([line, path.call(print, 'children', 1)])
-          ])
+          // Flatten same operator only
+          const operands: Doc[] = []
+          const ops: string[] = []
+          
+          const flattenLogical = (p: AstPath<ASTNode>): void => {
+            const n = p.getValue()
+            
+            // Check if this is a binary_expression with the SAME logical operator
+            if (n.type === 'binary_expression' && n.children?.length === 2) {
+              const op = extractOperator(n.text ?? '', n.children[0], n.children[1])
+              if (op === operator) {
+                p.call(flattenLogical, 'children', 0)
+                ops.push(op)
+                p.call(flattenLogical, 'children', 1)
+                return
+              }
+            }
+            // Also handle simple_expression wrapper
+            if (n.type === 'simple_expression' && n.children?.length === 1) {
+              const child = n.children[0]
+              if (child.type === 'binary_expression' && child.children?.length === 2) {
+                const op = extractOperator(child.text ?? '', child.children[0], child.children[1])
+                if (op === operator) {
+                  p.call((innerPath) => {
+                    innerPath.call(flattenLogical, 'children', 0)
+                    ops.push(op)
+                    innerPath.call(flattenLogical, 'children', 1)
+                  }, 'children', 0)
+                  return
+                }
+              }
+            }
+            // Base case - not same operator, print normally
+            operands.push(print(p))
+          }
+          
+          flattenLogical(path)
+          
+          if (ops.length === 0) {
+            return operands[0]
+          }
+          
+          // Build flat structure with sibling groups, same as arithmetic operators.
+          // Each operator+operand pair is an independent group that decides
+          // whether to break based on remaining space on the current line.
+          // This avoids cascading indentation when mixed and/or operators nest.
+          const parts: Doc[] = [operands[0]]
+          
+          for (let i = 0; i < ops.length; i++) {
+            parts.push(' ', ops[i], group([line, operands[i + 1]]))
+          }
+          
+          return parts
         }
 
         // Arithmetic operators: allow breaking after operator when line is too long
@@ -959,13 +1029,13 @@ export const printModelica: Printer<ASTNode>['print'] = (
         const additiveOperators = ['+', '-', '.+', '.-']
         const multiplicativeOperators = ['*', '/', '.*', './']
         const arithmeticOperators = [...additiveOperators, ...multiplicativeOperators]
-        
+
         if (arithmeticOperators.includes(operator)) {
-          // Flatten same-precedence arithmetic operators into a single fill
-          // This avoids nested groups that cause cascading indentation
+          // Flatten same-precedence arithmetic operators into a single structure.
+          // This avoids nested groups that cause cascading indentation.
           const operands: Doc[] = []
           const ops: string[] = []
-          
+
           // Helper to unwrap simple_expression to find binary_expression
           const unwrapToBinary = (n: ASTNode): ASTNode | null => {
             if (n.type === 'binary_expression') return n
@@ -974,11 +1044,11 @@ export const printModelica: Printer<ASTNode>['print'] = (
             }
             return null
           }
-          
+
           // Recursive flatten - collects all operands and operators
           const flatten = (p: AstPath<ASTNode>): void => {
             const n = p.getValue()
-            
+
             // Check if this is a binary_expression (directly or wrapped in simple_expression)
             const binaryNode = unwrapToBinary(n)
             if (binaryNode && binaryNode.children?.length === 2) {
@@ -1011,28 +1081,44 @@ export const printModelica: Printer<ASTNode>['print'] = (
             // Base case - not an arithmetic binary_expression, print normally
             operands.push(print(p))
           }
-          
+
           flatten(path)
-          
-          // Build fill parts: [content, line, content, line, ...]
-          // fill expects alternating content and line separators
-          // Operator at END of content before break: "a + \n b + \n c"
-          const fillParts: Doc[] = []
-          for (let i = 0; i < ops.length; i++) {
-            if (i > 0) {
-              fillParts.push(line)
-            }
-            // Content: operand followed by operator
-            fillParts.push([operands[i], ' ', ops[i]])
+
+          // Build the expression using FLAT sibling groups (not nested).
+          // Similar to Prettier JS's binary expression handling, each
+          // operator+operand pair is an independent group that decides
+          // whether to break based on remaining space on the current line.
+          //
+          // Structure: [op0, ' +', group([line, op1]), ' +', group([line, op2])]
+          //
+          // Key insight: sibling groups are evaluated INDEPENDENTLY.
+          // After a multi-line operand finishes, the next group checks if
+          // its content fits on the REMAINING space of the current line.
+          // This allows ")) + C" to stay on one line when there's room.
+          //
+          // Example: For "A + B + C" where B is multi-line:
+          //   A + complex_expr *
+          //     ((if x then 1 else 0) +
+          //       (if y then 1 else 0)) + C
+          // The " + C" fits on the last line of the parenthesized expression.
+
+          if (ops.length === 0) {
+            return operands[0]
           }
-          // Last operand
-          fillParts.push(line)
-          fillParts.push(operands[ops.length])
+
+          // Build flat structure: first operand, then sibling groups for each subsequent
+          const parts: Doc[] = [operands[0]]
           
-          // Return fill - parent modification context provides indentation
-          return fill(fillParts)
+          for (let i = 0; i < ops.length; i++) {
+            // Each operator+operand pair is wrapped in its own group.
+            // The group independently decides whether to break based on
+            // whether its content fits on the remaining line space.
+            parts.push(' ', ops[i], group([line, operands[i + 1]]))
+          }
+
+          return parts
         }
-        
+
         // Short expressions and comparisons: stay inline
         return [
           path.call(print, 'children', 0),
@@ -1040,7 +1126,7 @@ export const printModelica: Printer<ASTNode>['print'] = (
           path.call(print, 'children', 1)
         ]
       }
-      
+
       // Fallback
       return printChildrenWithSpaces(path, print)
     }
@@ -1049,7 +1135,7 @@ export const printModelica: Printer<ASTNode>['print'] = (
       // Check for operator at start of text
       const text = node.text ?? ''
       const parts: Doc[] = []
-      
+
       if (text.startsWith('not ')) {
         parts.push('not ')
       } else if (text.startsWith('.-')) {
@@ -1061,7 +1147,7 @@ export const printModelica: Printer<ASTNode>['print'] = (
       } else if (text.startsWith('+')) {
         parts.push('+')
       }
-      
+
       for (let i = 0; i < node.children.length; i++) {
         parts.push(path.call(print, 'children', i))
       }
@@ -1105,12 +1191,12 @@ export const printModelica: Printer<ASTNode>['print'] = (
     case 'array_constructor': {
       const args = path.map(print, 'children')
       const inAnnotation = isInsideAnnotation(path)
-      
+
       if (inAnnotation) {
         // In annotations, prefer compact array formatting
         return group(['{', join(', ', args), '}'])
       }
-      
+
       return group([
         '{',
         indent([softline, join([',', line], args)]),
@@ -1125,12 +1211,12 @@ export const printModelica: Printer<ASTNode>['print'] = (
     case 'array_concatenation': {
       const rows = path.map(print, 'children')
       const inAnnotation = isInsideAnnotation(path)
-      
+
       if (inAnnotation) {
         // In annotations, prefer compact formatting
         return group(['[', join('; ', rows), ']'])
       }
-      
+
       return group([
         '[',
         indent([softline, join([';', line], rows)]),
@@ -1141,7 +1227,7 @@ export const printModelica: Printer<ASTNode>['print'] = (
 
     case 'array_comprehension': {
       const parts: Doc[] = ['{']
-      
+
       for (let i = 0; i < node.children.length; i++) {
         const child = node.children[i]
         if (child.type === 'for_indices') {
@@ -1150,7 +1236,7 @@ export const printModelica: Printer<ASTNode>['print'] = (
           parts.push(path.call(print, 'children', i))
         }
       }
-      
+
       parts.push('}')
       return parts
     }
@@ -1173,11 +1259,11 @@ export const printModelica: Printer<ASTNode>['print'] = (
       const inAnnotation = isInsideAnnotation(path)
       if (inAnnotation) {
         // Get function name from first child
-        const funcRef = node.children.find(c => 
+        const funcRef = node.children.find(c =>
           c.type === 'component_reference' || c.type === 'name'
         )
         const funcName = funcRef?.text ?? ''
-        
+
         if (GRAPHICAL_PRIMITIVES.has(funcName)) {
           // For graphical primitives, use normalized compact text
           // only if it fits within reasonable line length
@@ -1189,9 +1275,9 @@ export const printModelica: Printer<ASTNode>['print'] = (
           // Otherwise fall through to normal formatting with indentation
         }
       }
-      
+
       const parts: Doc[] = []
-      
+
       for (let i = 0; i < node.children.length; i++) {
         const child = node.children[i]
         if (child.type === 'component_reference' || child.type === 'name') {
@@ -1209,7 +1295,7 @@ export const printModelica: Printer<ASTNode>['print'] = (
       }
       const args = path.map(print, 'children')
       const inAnnotation = isInsideAnnotation(path)
-      
+
       if (inAnnotation) {
         // In annotations, use fill to pack as many attributes as possible per line
         const fillItems: Doc[] = []
@@ -1225,20 +1311,20 @@ export const printModelica: Printer<ASTNode>['print'] = (
           ')'
         ])
       }
-      
+
       // Check if this is a simple single-argument function call
       // function_call_args has children like function_arguments or named_arguments
       // We need to check if those have only one actual argument
       const firstChild = node.children[0]
-      const isSingleArg = firstChild && 
+      const isSingleArg = firstChild &&
         (firstChild.type === 'function_arguments' || firstChild.type === 'named_arguments') &&
         firstChild.children.length === 1
-      
+
       if (isSingleArg) {
         // Simple single-argument call - keep on one line
         return group(['(', args[0], ')'])
       }
-      
+
       return group([
         '(',
         indent([softline, join([',', line], args)]),
@@ -1282,14 +1368,20 @@ export const printModelica: Printer<ASTNode>['print'] = (
 
     case 'named_argument': {
       const parts: Doc[] = []
-      
+      const inAnnotation = isInsideAnnotation(path)
+
       for (let i = 0; i < node.children.length; i++) {
         const child = node.children[i]
         if (child.type === 'IDENT') {
           parts.push(child.text ?? '', '=')
         } else {
-          // Wrap expression in indent so continuation lines are indented
-          parts.push(indent(path.call(print, 'children', i)))
+          // In annotations, don't add extra indent - top-level annotation already handles it
+          // In non-annotation contexts, wrap expression in indent for continuation lines
+          if (inAnnotation) {
+            parts.push(path.call(print, 'children', i))
+          } else {
+            parts.push(indent(path.call(print, 'children', i)))
+          }
         }
       }
       return parts
@@ -1303,7 +1395,7 @@ export const printModelica: Printer<ASTNode>['print'] = (
     // ===========================================
     case 'name': {
       const parts: Doc[] = []
-      
+
       for (let i = 0; i < node.children.length; i++) {
         const child = node.children[i]
         if (child.type === 'name') {
@@ -1322,7 +1414,7 @@ export const printModelica: Printer<ASTNode>['print'] = (
 
     case 'component_reference': {
       const parts: Doc[] = []
-      
+
       for (let i = 0; i < node.children.length; i++) {
         const child = node.children[i]
         if (child.type === 'IDENT') {
@@ -1359,7 +1451,7 @@ export const printModelica: Printer<ASTNode>['print'] = (
     // ===========================================
     case 'external_clause': {
       const parts: Doc[] = ['external']
-      
+
       for (let i = 0; i < node.children.length; i++) {
         const child = node.children[i]
         if (child.type === 'language_specification') {
@@ -1433,14 +1525,14 @@ function printChildrenWithSpaces(
 ): Doc[] {
   const node = path.getValue()
   const parts: Doc[] = []
-  
+
   for (let i = 0; i < node.children.length; i++) {
     if (i > 0) {
       parts.push(' ')
     }
     parts.push(path.call(print, 'children', i))
   }
-  
+
   return parts
 }
 
@@ -1449,25 +1541,25 @@ function printChildrenWithSpaces(
  */
 function extractElementPrefix(node: ASTNode): string {
   const text = node.text ?? ''
-  
+
   // Get the start position of the first child
   const firstChild = node.children[0]
   if (!firstChild) return ''
-  
+
   const startRow = node.range.start.row
   const startCol = node.range.start.column
   const childStartRow = firstChild.range.start.row
   const childStartCol = firstChild.range.start.column
-  
+
   // If child starts at same position as node, no prefix
   if (startRow === childStartRow && startCol === childStartCol) {
     return ''
   }
-  
+
   // Extract the prefix text from the node
   const lines = text.split('\n')
   let prefixText = ''
-  
+
   if (startRow === childStartRow) {
     // Same line - extract from startCol to childStartCol
     prefixText = lines[0].substring(0, childStartCol - startCol).trim()
@@ -1475,7 +1567,7 @@ function extractElementPrefix(node: ASTNode): string {
     // Different lines - take the first line up to newline
     prefixText = lines[0].trim()
   }
-  
+
   return prefixText
 }
 
@@ -1485,25 +1577,25 @@ function extractElementPrefix(node: ASTNode): string {
  */
 function extractComponentClausePrefix(node: ASTNode): string {
   const text = node.text ?? ''
-  
+
   // Find the type_specifier child
   const typeSpec = node.children.find(c => c.type === 'type_specifier')
   if (!typeSpec) return ''
-  
+
   const startRow = node.range.start.row
   const startCol = node.range.start.column
   const typeStartRow = typeSpec.range.start.row
   const typeStartCol = typeSpec.range.start.column
-  
+
   // If type_specifier starts at same position as component_clause, no prefix
   if (startRow === typeStartRow && startCol === typeStartCol) {
     return ''
   }
-  
+
   // Extract the prefix text
   const lines = text.split('\n')
   let prefixText = ''
-  
+
   if (startRow === typeStartRow) {
     // Same line - extract from start to type_specifier start
     prefixText = lines[0].substring(0, typeStartCol - startCol).trim()
@@ -1511,7 +1603,7 @@ function extractComponentClausePrefix(node: ASTNode): string {
     // Different lines - take the first line
     prefixText = lines[0].trim()
   }
-  
+
   return prefixText
 }
 
@@ -1522,16 +1614,16 @@ function extractModificationPrefix(node: ASTNode): string {
   const text = node.text ?? ''
   const firstChild = node.children[0]
   if (!firstChild) return ''
-  
+
   const startCol = node.range.start.column
   const childStartCol = firstChild.range.start.column
-  
+
   if (node.range.start.row === firstChild.range.start.row && childStartCol > startCol) {
     const lines = text.split('\n')
     const prefixText = lines[0].substring(0, childStartCol - startCol).trim()
     return prefixText
   }
-  
+
   return ''
 }
 
@@ -1542,16 +1634,16 @@ function extractRedeclarePrefix(node: ASTNode): string {
   const text = node.text ?? ''
   const firstChild = node.children[0]
   if (!firstChild) return 'redeclare'
-  
+
   const startCol = node.range.start.column
   const childStartCol = firstChild.range.start.column
-  
+
   if (node.range.start.row === firstChild.range.start.row && childStartCol > startCol) {
     const lines = text.split('\n')
     const prefixText = lines[0].substring(0, childStartCol - startCol).trim()
     if (prefixText) return prefixText
   }
-  
+
   return 'redeclare'
 }
 
@@ -1562,27 +1654,27 @@ function extractOperator(fullText: string, leftChild: ASTNode, rightChild: ASTNo
   // Calculate positions relative to fullText
   const leftText = leftChild.text ?? ''
   const rightText = rightChild.text ?? ''
-  
+
   // The operator is what's between leftText and rightText in fullText
   const leftEnd = fullText.indexOf(leftText) + leftText.length
   const rightStart = fullText.lastIndexOf(rightText)
-  
+
   if (leftEnd >= 0 && rightStart > leftEnd) {
     const operatorText = fullText.substring(leftEnd, rightStart).trim()
     if (operatorText) {
       return operatorText
     }
   }
-  
+
   // Fallback: try to detect common operators in the full text
-  const operators = ['==', '<>', '<=', '>=', '.+', '.-', '.*', './', '.^', 
+  const operators = ['==', '<>', '<=', '>=', '.+', '.-', '.*', './', '.^',
                      'and', 'or', '<', '>', '+', '-', '*', '/', '^', '=']
   for (const op of operators) {
     if (fullText.includes(` ${op} `) || fullText.includes(op)) {
       return op
     }
   }
-  
+
   return '?'  // Unknown operator
 }
 

@@ -24,7 +24,7 @@
     "clean": "rm -rf dist",
     "prepublishOnly": "npm run clean && npm run build",
     "format": "node dist/cli.js",
-    "parse": "tsx test/parser.ts",
+    "parse": "tsx src/cli.ts",
     "test": "npm run build && npm run parse -- test/AirToWater.mo"
   },
   "keywords": [

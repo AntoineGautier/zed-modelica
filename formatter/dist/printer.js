@@ -370,30 +370,17 @@ export const printModelica = (path, __options, print) => {
             }
             const args = path.map(print, 'children');
             const inAnnotation = isInsideAnnotation(path);
-            // Check if this is a nested class_modification inside an annotation
-            // (e.g., annotation(Dialog(...)) - Dialog's class_modification is nested)
-            // Only skip extra indent when inside annotation AND parent element_modification
-            // has a name that's not a graphical primitive (those have their own handling)
-            const parent = path.getParentNode();
-            const grandparent = path.getParentNode(1);
-            const isNestedInAnnotation = inAnnotation &&
-                parent?.type === 'modification' &&
-                grandparent?.type === 'element_modification';
             if (inAnnotation) {
-                // In annotations, use fill to pack as many attributes as possible per line
-                // fill expects alternating: [item, separator, item, separator, ...]
-                // where separator uses 'line' which becomes space when flat, newline when broken
-                const fillItems = [];
-                for (let i = 0; i < args.length; i++) {
-                    if (i > 0) {
-                        // Separator between items: comma + line (space when flat, newline when breaking)
-                        fillItems.push([',', line]);
-                    }
-                    fillItems.push(args[i]);
-                }
-                // For graphical primitives and annotation, don't add newline after opening paren
+                // For graphical primitives, use fill to pack attributes
                 const isGraphicalContext = isGraphicalPrimitiveContext(path);
                 if (isGraphicalContext) {
+                    const fillItems = [];
+                    for (let i = 0; i < args.length; i++) {
+                        if (i > 0) {
+                            fillItems.push([',', line]);
+                        }
+                        fillItems.push(args[i]);
+                    }
                     // No softline after '(' - content starts on same line
                     // No softline before ')' - closing paren stays on last content line
                     return group([
@@ -402,14 +389,38 @@ export const printModelica = (path, __options, print) => {
                         ')'
                     ]);
                 }
-                // fill will pack as many items as fit on each line
-                // No softline before ')' - closing paren on same line as last attribute
-                // Avoid extra indent if nested in annotation (like Dialog inside annotation)
-                return group([
-                    '(',
-                    isNestedInAnnotation ? [softline, fill(fillItems)] : indent([softline, fill(fillItems)]),
-                    ')'
-                ]);
+                // Check if this is a top-level annotation class_modification
+                const parent = path.getParentNode();
+                const isTopLevelAnnotation = parent?.type === 'annotation_clause';
+                // For all annotation class_modifications (top-level and nested),
+                // use fill to pack attributes on same line until max length.
+                // Only indent once at the top level to avoid cumulative indentation
+                // when multiple opening constructs are packed on same line.
+                const fillItems = [];
+                for (let i = 0; i < args.length; i++) {
+                    if (i > 0) {
+                        fillItems.push([',', line]);
+                    }
+                    fillItems.push(args[i]);
+                }
+                if (isTopLevelAnnotation) {
+                    // Top-level annotation: add indent for line breaks
+                    return group([
+                        '(',
+                        indent(fill(fillItems)),
+                        ')'
+                    ]);
+                }
+                else {
+                    // Nested class_modifications (like transformation inside Placement):
+                    // Don't add additional indent - just use fill directly
+                    // This prevents cumulative indentation when constructs are nested
+                    return group([
+                        '(',
+                        fill(fillItems),
+                        ')'
+                    ]);
+                }
             }
             // Normal formatting with line breaks
             // No softline before ')' - closing paren on same line as last attribute
@@ -870,13 +881,66 @@ export const printModelica = (path, __options, print) => {
                 const leftChild = node.children[0];
                 const rightChild = node.children[1];
                 const operator = extractOperator(node.text ?? '', leftChild, rightChild);
-                // Logical operators (and/or) break with indent for if clause conditions
+                // Logical operators (and/or) - flatten SAME operator only
+                // to avoid cascading indentation in conditions like:
+                //   if a and b and c
+                // Should become:
+                //   if a and
+                //     b and
+                //     c
+                // Not:
+                //   if a and
+                //     b and
+                //       c
+                // Note: 'and' and 'or' have different precedence, so we only
+                // flatten the same operator (and with and, or with or)
                 if (operator === 'and' || operator === 'or') {
-                    return group([
-                        path.call(print, 'children', 0),
-                        ' ', operator,
-                        indent([line, path.call(print, 'children', 1)])
-                    ]);
+                    // Flatten same operator only
+                    const operands = [];
+                    const ops = [];
+                    const flattenLogical = (p) => {
+                        const n = p.getValue();
+                        // Check if this is a binary_expression with the SAME logical operator
+                        if (n.type === 'binary_expression' && n.children?.length === 2) {
+                            const op = extractOperator(n.text ?? '', n.children[0], n.children[1]);
+                            if (op === operator) {
+                                p.call(flattenLogical, 'children', 0);
+                                ops.push(op);
+                                p.call(flattenLogical, 'children', 1);
+                                return;
+                            }
+                        }
+                        // Also handle simple_expression wrapper
+                        if (n.type === 'simple_expression' && n.children?.length === 1) {
+                            const child = n.children[0];
+                            if (child.type === 'binary_expression' && child.children?.length === 2) {
+                                const op = extractOperator(child.text ?? '', child.children[0], child.children[1]);
+                                if (op === operator) {
+                                    p.call((innerPath) => {
+                                        innerPath.call(flattenLogical, 'children', 0);
+                                        ops.push(op);
+                                        innerPath.call(flattenLogical, 'children', 1);
+                                    }, 'children', 0);
+                                    return;
+                                }
+                            }
+                        }
+                        // Base case - not same operator, print normally
+                        operands.push(print(p));
+                    };
+                    flattenLogical(path);
+                    if (ops.length === 0) {
+                        return operands[0];
+                    }
+                    // Build flat structure with sibling groups, same as arithmetic operators.
+                    // Each operator+operand pair is an independent group that decides
+                    // whether to break based on remaining space on the current line.
+                    // This avoids cascading indentation when mixed and/or operators nest.
+                    const parts = [operands[0]];
+                    for (let i = 0; i < ops.length; i++) {
+                        parts.push(' ', ops[i], group([line, operands[i + 1]]));
+                    }
+                    return parts;
                 }
                 // Arithmetic operators: allow breaking after operator when line is too long
                 // Includes additive (+, -) and multiplicative (*, /) operators
@@ -885,8 +949,8 @@ export const printModelica = (path, __options, print) => {
                 const multiplicativeOperators = ['*', '/', '.*', './'];
                 const arithmeticOperators = [...additiveOperators, ...multiplicativeOperators];
                 if (arithmeticOperators.includes(operator)) {
-                    // Flatten same-precedence arithmetic operators into a single fill
-                    // This avoids nested groups that cause cascading indentation
+                    // Flatten same-precedence arithmetic operators into a single structure.
+                    // This avoids nested groups that cause cascading indentation.
                     const operands = [];
                     const ops = [];
                     // Helper to unwrap simple_expression to find binary_expression
@@ -936,22 +1000,35 @@ export const printModelica = (path, __options, print) => {
                         operands.push(print(p));
                     };
                     flatten(path);
-                    // Build fill parts: [content, line, content, line, ...]
-                    // fill expects alternating content and line separators
-                    // Operator at END of content before break: "a + \n b + \n c"
-                    const fillParts = [];
-                    for (let i = 0; i < ops.length; i++) {
-                        if (i > 0) {
-                            fillParts.push(line);
-                        }
-                        // Content: operand followed by operator
-                        fillParts.push([operands[i], ' ', ops[i]]);
+                    // Build the expression using FLAT sibling groups (not nested).
+                    // Similar to Prettier JS's binary expression handling, each
+                    // operator+operand pair is an independent group that decides
+                    // whether to break based on remaining space on the current line.
+                    //
+                    // Structure: [op0, ' +', group([line, op1]), ' +', group([line, op2])]
+                    //
+                    // Key insight: sibling groups are evaluated INDEPENDENTLY.
+                    // After a multi-line operand finishes, the next group checks if
+                    // its content fits on the REMAINING space of the current line.
+                    // This allows ")) + C" to stay on one line when there's room.
+                    //
+                    // Example: For "A + B + C" where B is multi-line:
+                    //   A + complex_expr *
+                    //     ((if x then 1 else 0) +
+                    //       (if y then 1 else 0)) + C
+                    // The " + C" fits on the last line of the parenthesized expression.
+                    if (ops.length === 0) {
+                        return operands[0];
                     }
-                    // Last operand
-                    fillParts.push(line);
-                    fillParts.push(operands[ops.length]);
-                    // Return fill - parent modification context provides indentation
-                    return fill(fillParts);
+                    // Build flat structure: first operand, then sibling groups for each subsequent
+                    const parts = [operands[0]];
+                    for (let i = 0; i < ops.length; i++) {
+                        // Each operator+operand pair is wrapped in its own group.
+                        // The group independently decides whether to break based on
+                        // whether its content fits on the remaining line space.
+                        parts.push(' ', ops[i], group([line, operands[i + 1]]));
+                    }
+                    return parts;
                 }
                 // Short expressions and comparisons: stay inline
                 return [
@@ -1171,14 +1248,21 @@ export const printModelica = (path, __options, print) => {
         }
         case 'named_argument': {
             const parts = [];
+            const inAnnotation = isInsideAnnotation(path);
             for (let i = 0; i < node.children.length; i++) {
                 const child = node.children[i];
                 if (child.type === 'IDENT') {
                     parts.push(child.text ?? '', '=');
                 }
                 else {
-                    // Wrap expression in indent so continuation lines are indented
-                    parts.push(indent(path.call(print, 'children', i)));
+                    // In annotations, don't add extra indent - top-level annotation already handles it
+                    // In non-annotation contexts, wrap expression in indent for continuation lines
+                    if (inAnnotation) {
+                        parts.push(path.call(print, 'children', i));
+                    }
+                    else {
+                        parts.push(indent(path.call(print, 'children', i)));
+                    }
                 }
             }
             return parts;

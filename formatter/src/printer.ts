@@ -254,8 +254,8 @@ export const printModelica: Printer<ASTNode>['print'] = (
           parts.push(indent([line, path.call(print, 'children', i)]))
         } else if (child.type === 'equation_section' ||
                    child.type === 'algorithm_section') {
-          // Equation/algorithm sections should start on a new line
-          parts.push(hardline, hardline, path.call(print, 'children', i))
+          // Equation/algorithm sections should start on a new line (no blank line)
+          parts.push(hardline, path.call(print, 'children', i))
         } else if (child.type === 'annotation_clause') {
           parts.push(hardline, path.call(print, 'children', i))
         } else if (child.type === 'external_clause') {

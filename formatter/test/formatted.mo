@@ -718,7 +718,6 @@ model AirToWater
     "Pressure boundary condition mimicking expansion tank"
     annotation(Placement(transformation(extent={{10,-10},{-10,10}}, rotation=90,
       origin={0,-340})));;
-
 initial equation
   // Calculation of pump speed providing design flow.
   if is_dpBalYPumSetCal and have_heaWat and
@@ -770,7 +769,6 @@ initial equation
       "The calculated pressure drop for the CHW balancing valve is negative, " +
       "indicating that the primary pump curve needs to be revised.");
   end if;
-
 equation
   /* Control point connection - start */
   connect(busWea, hp.busWea);

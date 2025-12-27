@@ -4,18 +4,71 @@
  */
 import { doc } from 'prettier';
 const { builders } = doc;
-const { group, indent, line, softline, hardline, join, fill } = builders;
-// Graphical primitive names that should prefer compact formatting
-// Graphical primitives that should not have newline after opening paren
-const GRAPHICAL_PRIMITIVE_NAMES = new Set([
-    'Line', 'Polygon', 'Rectangle', 'Ellipse', 'Text', 'Bitmap', 'Placement'
-]);
-const GRAPHICAL_PRIMITIVES = new Set([
-    'Line', 'Polygon', 'Rectangle', 'Ellipse', 'Text', 'Bitmap',
-    'Placement', 'Transformation', 'IconMap', 'DiagramMap',
-    'transformation', 'extent', 'origin', 'points', 'color', 'lineColor',
-    'fillColor', 'pattern', 'fillPattern', 'lineThickness', 'rotation'
-]);
+const { group, indent, line, softline, hardline, join, fill, breakParent } = builders;
+/**
+ * Simple HTML formatter for documentation strings
+ * Enforces line length while preserving structure and never breaking within words/tags
+ */
+function formatHTMLString(html, maxWidth = 80, baseIndent = '') {
+    const lines = [];
+    let currentLine = baseIndent;
+    // Split on tags and text, preserving structure
+    const tokens = html.match(/(<[^>]+>|[^<]+)/g) || [];
+    for (const token of tokens) {
+        if (token.startsWith('<')) {
+            // This is a tag - add it to current line
+            if (currentLine.length + token.length > maxWidth && currentLine.trim().length > 0) {
+                // Tag would exceed limit, start new line
+                lines.push(currentLine.trimEnd());
+                currentLine = baseIndent + token;
+            }
+            else {
+                currentLine += token;
+            }
+        }
+        else {
+            // This is text content - try to keep phrases together
+            // Only break at spaces when line would exceed limit
+            if (currentLine.length + token.length > maxWidth && currentLine.trim().length > 0) {
+                // Text would exceed limit - need to break it
+                // Preserve leading whitespace
+                const leadingSpace = token.match(/^\s*/)?.[0] || '';
+                const trailingSpace = token.match(/\s*$/)?.[0] || '';
+                const trimmedToken = token.trim();
+                if (trimmedToken) {
+                    const words = trimmedToken.split(/\s+/);
+                    for (let i = 0; i < words.length; i++) {
+                        const word = words[i];
+                        const isFirst = i === 0;
+                        const isLast = i === words.length - 1;
+                        if (currentLine.length + (isFirst ? leadingSpace.length : 1) + word.length > maxWidth && currentLine.trim().length > 0) {
+                            // Start new line
+                            lines.push(currentLine.trimEnd());
+                            currentLine = baseIndent + word + (isLast ? trailingSpace : '');
+                        }
+                        else {
+                            currentLine += (isFirst ? leadingSpace : ' ') + word + (isLast ? trailingSpace : '');
+                        }
+                    }
+                }
+                else {
+                    // Token is only whitespace, just add it if there's room
+                    if (currentLine.length + token.length <= maxWidth) {
+                        currentLine += token;
+                    }
+                }
+            }
+            else {
+                // Whole text fits, add it
+                currentLine += token;
+            }
+        }
+    }
+    if (currentLine.trim().length > 0) {
+        lines.push(currentLine.trimEnd());
+    }
+    return lines.join('\n');
+}
 /**
  * Check if we're inside an annotation clause by walking up the path
  */
@@ -39,47 +92,49 @@ function isInsideAnnotation(path) {
     return false;
 }
 /**
- * Check if this element_modification is a graphical primitive
+ * Check if we're a first-level attribute inside an annotation
+ * (direct child of the annotation's class_modification)
  */
-function isGraphicalPrimitive(node) {
-    const nameChild = node.children.find(c => c.type === 'name');
-    const modName = nameChild?.text ?? '';
-    return GRAPHICAL_PRIMITIVES.has(modName);
+function isFirstLevelAnnotationAttribute(path) {
+    try {
+        // Walk up to find if parent is class_modification and grandparent is annotation_clause
+        const grandparent = path.getParentNode(1); // might be class_modification
+        const greatGrandparent = path.getParentNode(2); // might be annotation_clause
+        return grandparent?.type === 'class_modification' &&
+            greatGrandparent?.type === 'annotation_clause';
+    }
+    catch {
+        return false;
+    }
 }
 /**
- * Check if the parent context is a graphical primitive (Line, Polygon, etc.)
- * or an annotation clause - these should not have newline after opening paren
+ * Check if we're inside a first-level annotation attribute
+ * (anywhere inside Diagram, Icon, Placement, etc. that are direct children of annotation)
  */
-function isGraphicalPrimitiveContext(path) {
+function isInsideFirstLevelAnnotationAttribute(path) {
     try {
-        // Check parent chain for element_modification with graphical primitive name
-        // or for annotation_clause
-        const parent = path.getParentNode(0);
-        if (!parent)
-            return false;
-        // Direct parent is annotation_clause
-        if (parent.type === 'annotation_clause')
-            return true;
-        // Parent is modification inside element_modification
-        if (parent.type === 'modification') {
-            const grandparent = path.getParentNode(1);
-            if (grandparent?.type === 'element_modification') {
-                const nameChild = grandparent.children.find(c => c.type === 'name');
-                const modName = nameChild?.text ?? '';
-                if (GRAPHICAL_PRIMITIVE_NAMES.has(modName))
+        let depth = 0;
+        while (depth < 20) {
+            const node = path.getParentNode(depth);
+            if (!node)
+                break;
+            // Check if this node is a function_call_args for a first-level attribute
+            if (node.type === 'function_call_args') {
+                const grandparent = path.getParentNode(depth + 1);
+                const greatGrandparent = path.getParentNode(depth + 2);
+                if (grandparent?.type === 'class_modification' &&
+                    greatGrandparent?.type === 'annotation_clause') {
                     return true;
+                }
             }
-        }
-        // Parent is element_modification directly
-        if (parent.type === 'element_modification') {
-            const nameChild = parent.children.find(c => c.type === 'name');
-            const modName = nameChild?.text ?? '';
-            if (GRAPHICAL_PRIMITIVE_NAMES.has(modName))
-                return true;
+            // Stop if we hit the annotation boundary
+            if (node.type === 'annotation_clause')
+                break;
+            depth++;
         }
     }
     catch {
-        // Ignore errors from path navigation
+        // Ignore errors
     }
     return false;
 }
@@ -97,10 +152,25 @@ export const printModelica = (path, __options, print) => {
         // Terminal nodes - print text directly
         // ===========================================
         case 'IDENT':
-        case 'STRING':
         case 'UNSIGNED_INTEGER':
         case 'UNSIGNED_REAL':
             return node.text ?? '';
+        case 'STRING': {
+            const text = node.text ?? '';
+            // Check if this is HTML documentation in an annotation
+            const inAnnotation = isInsideAnnotation(path);
+            if (inAnnotation && text.includes('<html>')) {
+                // Extract string content (remove quotes)
+                const match = text.match(/^"(.*)"$/s);
+                if (match) {
+                    const htmlContent = match[1];
+                    // Format HTML with line length limit
+                    const formatted = formatHTMLString(htmlContent, 80, '');
+                    return `"${formatted}"`;
+                }
+            }
+            return text;
+        }
         case 'BLOCK_COMMENT':
         case 'comment':
             return node.text ?? '';
@@ -165,6 +235,10 @@ export const printModelica = (path, __options, print) => {
                 }
                 else if (child.type === 'external_clause') {
                     parts.push(hardline, path.call(print, 'children', i));
+                }
+                else if (child.type === 'comment' || child.type === 'BLOCK_COMMENT') {
+                    // Comments between sections - indent them like other content
+                    parts.push(indent([line, path.call(print, 'children', i)]));
                 }
             }
             parts.push(hardline, 'end ', className, ';');
@@ -286,6 +360,12 @@ export const printModelica = (path, __options, print) => {
             return join([',', line], path.map(print, 'children'));
         case 'component_declaration': {
             const parts = [];
+            let hasModification = false;
+            // Check if declaration has a modification (class_modification with arguments)
+            const decl = node.children.find(c => c.type === 'declaration');
+            if (decl) {
+                hasModification = decl.children.some(c => c.type === 'modification');
+            }
             for (let i = 0; i < node.children.length; i++) {
                 const child = node.children[i];
                 if (child.type === 'declaration') {
@@ -293,6 +373,17 @@ export const printModelica = (path, __options, print) => {
                 }
                 else if (child.type === 'condition_attribute') {
                     parts.push(' ', path.call(print, 'children', i));
+                }
+                else if (child.type === 'expression' || child.type === 'simple_expression') {
+                    // Conditional clause: "if <expression>"
+                    // If declaration has modification, break line before 'if' for readability
+                    // Otherwise keep it on same line
+                    if (hasModification) {
+                        parts.push(indent([line, 'if ', path.call(print, 'children', i)]));
+                    }
+                    else {
+                        parts.push(' if ', path.call(print, 'children', i));
+                    }
                 }
                 else if (child.type === 'description_string') {
                     // Break line before description string, indented
@@ -340,6 +431,7 @@ export const printModelica = (path, __options, print) => {
             // Top-level assignments get spaces around =, attribute bindings don't
             const parent = path.getParentNode();
             const isTopLevelAssignment = parent?.type === 'declaration';
+            const inAnnotation = isInsideAnnotation(path);
             for (let i = 0; i < node.children.length; i++) {
                 const child = node.children[i];
                 if (child.type === 'class_modification') {
@@ -356,8 +448,14 @@ export const printModelica = (path, __options, print) => {
                     }
                     else {
                         // For attribute bindings: no space around =
-                        // Wrap expression in indent so any internal line breaks are indented
-                        parts.push('=', indent(path.call(print, 'children', i)));
+                        // In annotations, don't add indent to keep compact
+                        if (inAnnotation) {
+                            parts.push('=', path.call(print, 'children', i));
+                        }
+                        else {
+                            // Wrap expression in indent so any internal line breaks are indented
+                            parts.push('=', indent(path.call(print, 'children', i)));
+                        }
                     }
                 }
             }
@@ -371,59 +469,41 @@ export const printModelica = (path, __options, print) => {
             const args = path.map(print, 'children');
             const inAnnotation = isInsideAnnotation(path);
             if (inAnnotation) {
-                // For graphical primitives, use fill to pack attributes
-                const isGraphicalContext = isGraphicalPrimitiveContext(path);
-                if (isGraphicalContext) {
-                    const fillItems = [];
-                    for (let i = 0; i < args.length; i++) {
-                        if (i > 0) {
-                            fillItems.push([',', line]);
-                        }
-                        fillItems.push(args[i]);
-                    }
-                    // No softline after '(' - content starts on same line
-                    // No softline before ')' - closing paren stays on last content line
-                    return group([
-                        '(',
-                        indent(fill(fillItems)),
-                        ')'
-                    ]);
-                }
-                // Check if this is a top-level annotation class_modification
                 const parent = path.getParentNode();
                 const isTopLevelAnnotation = parent?.type === 'annotation_clause';
-                // For all annotation class_modifications (top-level and nested),
-                // use fill to pack attributes on same line until max length.
-                // Only indent once at the top level to avoid cumulative indentation
-                // when multiple opening constructs are packed on same line.
-                const fillItems = [];
-                for (let i = 0; i < args.length; i++) {
-                    if (i > 0) {
-                        fillItems.push([',', line]);
-                    }
-                    fillItems.push(args[i]);
-                }
                 if (isTopLevelAnnotation) {
-                    // Top-level annotation: add indent for line breaks
+                    // Top-level annotation: first arg on same line, siblings separated by line breaks
+                    // All content inside annotation should be indented
+                    if (args.length === 0) {
+                        return '()';
+                    }
+                    if (args.length === 1) {
+                        return group(['(', indent(args[0]), ')']);
+                    }
+                    // Multiple args: first inline, rest indented on new lines
                     return group([
                         '(',
-                        indent(fill(fillItems)),
+                        indent([
+                            args[0],
+                            ',',
+                            line,
+                            join([',', line], args.slice(1))
+                        ]),
                         ')'
                     ]);
                 }
                 else {
-                    // Nested class_modifications (like transformation inside Placement):
-                    // Don't add additional indent - just use fill directly
-                    // This prevents cumulative indentation when constructs are nested
-                    return group([
-                        '(',
-                        fill(fillItems),
-                        ')'
-                    ]);
+                    // Nested annotations: try to fit on one line, but break if too long
+                    if (args.length === 0) {
+                        return '()';
+                    }
+                    if (args.length === 1) {
+                        return group(['(', args[0], ')']);
+                    }
+                    return group(['(', join([',', line], args), ')']);
                 }
             }
             // Normal formatting with line breaks
-            // No softline before ')' - closing paren on same line as last attribute
             return group([
                 '(',
                 indent([softline, join([',', line], args)]),
@@ -452,19 +532,6 @@ export const printModelica = (path, __options, print) => {
             const prefix = extractModificationPrefix(node);
             if (prefix) {
                 parts.push(prefix, ' ');
-            }
-            // Check if this is a graphical primitive inside an annotation
-            const inAnnotation = isInsideAnnotation(path);
-            const isGraphical = isGraphicalPrimitive(node);
-            if (inAnnotation && isGraphical) {
-                // For graphical primitives in annotations, use normalized compact text
-                // only if it fits within reasonable line length
-                const text = node.text ?? '';
-                const normalized = normalizeGraphicalText(text);
-                if (normalized.length <= 70) {
-                    return prefix ? [prefix, ' ', normalized] : normalized;
-                }
-                // Otherwise fall through to normal formatting with indentation
             }
             for (let i = 0; i < node.children.length; i++) {
                 const child = node.children[i];
@@ -531,7 +598,7 @@ export const printModelica = (path, __options, print) => {
                 if (child.type === 'equation_list') {
                     content.push(path.call(print, 'children', i));
                 }
-                else if (child.type === 'comment') {
+                else if (child.type === 'comment' || child.type === 'BLOCK_COMMENT') {
                     // Comments before the equation list - add them in order
                     content.push(path.call(print, 'children', i));
                 }
@@ -726,7 +793,7 @@ export const printModelica = (path, __options, print) => {
                 if (child.type === 'statement_list') {
                     content.push(path.call(print, 'children', i));
                 }
-                else if (child.type === 'comment') {
+                else if (child.type === 'comment' || child.type === 'BLOCK_COMMENT') {
                     content.push(path.call(print, 'children', i));
                 }
             }
@@ -1095,8 +1162,50 @@ export const printModelica = (path, __options, print) => {
             const args = path.map(print, 'children');
             const inAnnotation = isInsideAnnotation(path);
             if (inAnnotation) {
-                // In annotations, prefer compact array formatting
-                return group(['{', join(', ', args), '}']);
+                // In annotations, check if this array contains function calls or complex expressions
+                const hasComplexContent = node.children.some(child => {
+                    // Check if it's a function application directly
+                    if (child.type === 'function_application')
+                        return true;
+                    // Check if it's an expression that contains a function application
+                    if (child.type.includes('expression') && child.text?.includes('('))
+                        return true;
+                    return false;
+                });
+                if (hasComplexContent) {
+                    // For arrays with function calls (like graphics={Polygon(...),Polygon(...)}),
+                    // force each item to start on a new line with proper indentation
+                    if (args.length === 0)
+                        return '{}';
+                    if (args.length === 1)
+                        return ['{', args[0], '}'];
+                    // Check if we're inside a first-level annotation attribute (like Diagram)
+                    const insideFirstLevel = isInsideFirstLevelAnnotationAttribute(path);
+                    if (insideFirstLevel) {
+                        // Inside first-level: use line breaks that respect parent indentation
+                        // Force parent group to break by using ifBreak
+                        if (args.length === 0)
+                            return '{}';
+                        if (args.length === 1) {
+                            return ['{', args[0], '}'];
+                        }
+                        // Multiple items: force break and signal parent to break
+                        const arrayContent = join([',', line], args);
+                        return group([
+                            '{',
+                            indent([line, arrayContent]),
+                            line,
+                            '}',
+                            breakParent // Signal parent Diagram group to break
+                        ], { shouldBreak: true });
+                    }
+                    else {
+                        // Not inside first-level: use hardline to force breaks
+                        return ['{', indent([hardline, join([',', hardline], args)]), hardline, '}'];
+                    }
+                }
+                // Condense coordinate/literal arrays with no spaces: {{1,2},{3,4}}
+                return ['{', ...args, '}'];
             }
             return group([
                 '{',
@@ -1105,8 +1214,36 @@ export const printModelica = (path, __options, print) => {
                 '}'
             ]);
         }
-        case 'array_arguments':
-            return join(', ', path.map(print, 'children'));
+        case 'array_arguments': {
+            const args = path.map(print, 'children');
+            const inAnnotation = isInsideAnnotation(path);
+            if (inAnnotation) {
+                // Check if this array contains function calls
+                const hasComplexContent = node.children.some(child => {
+                    if (child.type === 'function_application')
+                        return true;
+                    if (child.type.includes('expression') && child.text?.includes('('))
+                        return true;
+                    return false;
+                });
+                if (hasComplexContent) {
+                    // For arrays with function calls, force line breaks
+                    // Check if we're inside a first-level annotation attribute
+                    const insideFirstLevel = isInsideFirstLevelAnnotationAttribute(path);
+                    if (insideFirstLevel) {
+                        // Inside first-level: use line breaks that respect parent indentation
+                        return join([',', line], args);
+                    }
+                    else {
+                        // Not inside first-level: use hardline
+                        return join([',', hardline], args);
+                    }
+                }
+                // In annotations, condense coordinate arrays with no spaces
+                return join(',', args);
+            }
+            return join(', ', args);
+        }
         case 'array_concatenation': {
             const rows = path.map(print, 'children');
             const inAnnotation = isInsideAnnotation(path);
@@ -1147,23 +1284,6 @@ export const printModelica = (path, __options, print) => {
         // Function calls
         // ===========================================
         case 'function_application': {
-            // Check if this is a graphical primitive in an annotation
-            const inAnnotation = isInsideAnnotation(path);
-            if (inAnnotation) {
-                // Get function name from first child
-                const funcRef = node.children.find(c => c.type === 'component_reference' || c.type === 'name');
-                const funcName = funcRef?.text ?? '';
-                if (GRAPHICAL_PRIMITIVES.has(funcName)) {
-                    // For graphical primitives, use normalized compact text
-                    // only if it fits within reasonable line length
-                    const text = node.text ?? '';
-                    const normalized = normalizeGraphicalText(text);
-                    if (normalized.length <= 70) {
-                        return normalized;
-                    }
-                    // Otherwise fall through to normal formatting with indentation
-                }
-            }
             const parts = [];
             for (let i = 0; i < node.children.length; i++) {
                 const child = node.children[i];
@@ -1183,19 +1303,26 @@ export const printModelica = (path, __options, print) => {
             const args = path.map(print, 'children');
             const inAnnotation = isInsideAnnotation(path);
             if (inAnnotation) {
-                // In annotations, use fill to pack as many attributes as possible per line
-                const fillItems = [];
-                for (let i = 0; i < args.length; i++) {
-                    if (i > 0) {
-                        fillItems.push([',', line]);
-                    }
-                    fillItems.push(args[i]);
+                // Check if this is a first-level annotation attribute
+                const isFirstLevel = isFirstLevelAnnotationAttribute(path);
+                if (isFirstLevel) {
+                    // First-level attributes: wrap content in indent
+                    // When content breaks, it will get additional indentation
+                    if (args.length === 0)
+                        return '()';
+                    return group(['(', indent([softline, join([',', line], args)]), softline, ')']);
                 }
-                return group([
-                    '(',
-                    indent([softline, fill(fillItems)]),
-                    ')'
-                ]);
+                else {
+                    // Nested attributes: pack compactly with fill
+                    const fillItems = [];
+                    for (let i = 0; i < args.length; i++) {
+                        if (i > 0) {
+                            fillItems.push([',', line]);
+                        }
+                        fillItems.push(args[i]);
+                    }
+                    return group(['(', fill(fillItems), ')']);
+                }
             }
             // Check if this is a simple single-argument function call
             // function_call_args has children like function_arguments or named_arguments
@@ -1217,16 +1344,24 @@ export const printModelica = (path, __options, print) => {
         case 'function_arguments': {
             const inAnnotation = isInsideAnnotation(path);
             if (inAnnotation) {
-                // Use fill to pack as many arguments as possible on each line
                 const args = path.map(print, 'children');
-                const fillItems = [];
-                for (let i = 0; i < args.length; i++) {
-                    if (i > 0) {
-                        fillItems.push([',', line]);
-                    }
-                    fillItems.push(args[i]);
+                // Check if we're inside a first-level annotation attribute
+                const insideFirstLevel = isInsideFirstLevelAnnotationAttribute(path);
+                if (insideFirstLevel) {
+                    // Inside first-level: use line breaks to respect nested content  
+                    return join([',', line], args);
                 }
-                return fill(fillItems);
+                else {
+                    // Not inside first-level: use fill to pack
+                    const fillItems = [];
+                    for (let i = 0; i < args.length; i++) {
+                        if (i > 0) {
+                            fillItems.push([',', line]);
+                        }
+                        fillItems.push(args[i]);
+                    }
+                    return fill(fillItems);
+                }
             }
             return join([',', line], path.map(print, 'children'));
         }
@@ -1365,22 +1500,6 @@ export const printModelica = (path, __options, print) => {
 // ===========================================
 // Helper functions
 // ===========================================
-/**
- * Normalize whitespace in graphical primitive text for compact output
- * Preserves structure but removes unnecessary whitespace
- */
-function normalizeGraphicalText(text) {
-    return text
-        .replace(/\s+/g, ' ') // collapse whitespace
-        .replace(/\(\s+/g, '(') // remove space after (
-        .replace(/\s+\)/g, ')') // remove space before )
-        .replace(/\{\s+/g, '{') // remove space after {
-        .replace(/\s+\}/g, '}') // remove space before }
-        .replace(/,\s*/g, ', ') // normalize comma spacing
-        .replace(/=\s+/g, '=') // remove space after =
-        .replace(/\s+=/g, '=') // remove space before =
-        .trim();
-}
 /**
  * Print all children without separators
  */

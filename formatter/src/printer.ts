@@ -245,13 +245,17 @@ export const printModelica: Printer<ASTNode>['print'] = (
           parts.push(className)
         } else if (child.type === 'description_string') {
           parts.push(indent([line, path.call(print, 'children', i)]))
+        } else if (child.type === 'extends_clause') {
+          // extends clause should be on new line with indent
+          parts.push(indent([line, path.call(print, 'children', i)]))
         } else if (child.type === 'element_list' ||
                    child.type === 'public_element_list' ||
                    child.type === 'protected_element_list') {
           parts.push(indent([line, path.call(print, 'children', i)]))
         } else if (child.type === 'equation_section' ||
                    child.type === 'algorithm_section') {
-          parts.push(hardline, path.call(print, 'children', i))
+          // Equation/algorithm sections should start on a new line
+          parts.push(hardline, hardline, path.call(print, 'children', i))
         } else if (child.type === 'annotation_clause') {
           parts.push(hardline, path.call(print, 'children', i))
         } else if (child.type === 'external_clause') {
@@ -1577,7 +1581,7 @@ export const printModelica: Printer<ASTNode>['print'] = (
       return printChildren(path, print)
 
     case 'annotation_clause':
-      return ['annotation', ...printChildren(path, print)]
+      return ['annotation', ...printChildren(path, print), ';']
 
     // ===========================================
     // External functions

@@ -39,6 +39,10 @@
   "peerDependencies": {
     "prettier": "^3.0.0"
   },
+  "dependencies": {
+    "tree-sitter": "^0.25.0",
+    "tree-sitter-modelica": "file:../grammars/modelica"
+  },
   "devDependencies": {
     "@types/node": "^20.10.0",
     "prettier": "^3.4.2",

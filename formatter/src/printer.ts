@@ -10,6 +10,122 @@ import type { ASTNode } from './parser.js'
 const { builders } = doc
 const { group, indent, line, softline, hardline, join, fill } = builders
 
+// ===========================================
+// Centralized Continuation Line Handling
+// ===========================================
+
+/**
+ * Determines if the current path is inside a context that has already
+ * added continuation indentation. This prevents cumulative/stacking indents.
+ * 
+ * A continuation context is entered when:
+ * - We're nested inside another binary_expression (the outer one already added indent)
+ * 
+ * We explicitly DON'T treat if_expression as a continuation context for binary
+ * expressions because the binary expression's continuation needs its own indent.
+ * 
+ * We stop looking at certain boundaries:
+ * - declaration (top-level variable declaration)
+ * - component_declaration  
+ * - equation / statement boundaries
+ * - function_call_args (each function call is its own context)
+ * - if_expression (each branch is its own context)
+ */
+function isInContinuationContext(path: AstPath<ASTNode>): boolean {
+  const currentNode = path.getValue()
+  
+  // Start from i=1 to skip the current node itself
+  for (let i = 1; i < 15; i++) {
+    const ancestor = path.getParentNode(i)
+    if (!ancestor) break
+    
+    // If we're nested inside another binary_expression, we're in continuation context
+    // The outer binary_expression already handles indentation for its operands
+    if (ancestor.type === 'binary_expression' && ancestor !== currentNode) {
+      return true
+    }
+    
+    // NOTE: We explicitly do NOT treat if_expression conditions as continuation context
+    // Binary expressions inside if conditions should still indent their own continuations
+    // The if_expression only handles indent for then/else, not the condition's internal structure
+    
+    // If we're inside a parenthesized_expression, we're in continuation context
+    // The parenthesized_expression adds indent for its content
+    if (ancestor.type === 'parenthesized_expression') {
+      return true
+    }
+    
+    // Stop at these boundaries - they reset the continuation context
+    if (ancestor.type === 'declaration') break
+    if (ancestor.type === 'component_declaration') break
+    if (ancestor.type === 'equation') break
+    if (ancestor.type === 'statement') break
+    if (ancestor.type === 'element') break
+    if (ancestor.type === 'function_call_args') break
+    if (ancestor.type === 'if_expression') break
+  }
+  return false
+}
+
+/**
+ * Wraps a document in continuation indentation, but only if not already
+ * in a continuation context. This is the central function for handling
+ * continuation lines consistently across all constructs.
+ * 
+ * @param content - The document to wrap
+ * @param path - Current AST path for context detection
+ * @returns Content wrapped with appropriate indentation
+ */
+function wrapContinuation(content: Doc, path: AstPath<ASTNode>): Doc {
+  if (isInContinuationContext(path)) {
+    // Already in continuation context - use group with line but NO indent
+    // This allows Prettier to decide whether to break, but keeps same indent level
+    return group([line, content])
+  }
+  // Not in continuation context - add indent with group for break decision
+  return group([indent([line, content])])
+}
+
+/**
+ * Determines if an if-expression appears "mid-line" - i.e., after something
+ * on the same line like `name=if ...` or `arg=if ...`.
+ * 
+ * When mid-line, the if-expression needs to indent its then/else keywords
+ * relative to where the if started, not relative to the left margin.
+ * 
+ * This is detected by checking if the parent is a modification with an
+ * expression (meaning there's a `=` before us) and the parent of that
+ * is NOT a top-level declaration.
+ */
+function isMidLineIfExpression(path: AstPath<ASTNode>): boolean {
+  const parent = path.getParentNode()
+  const grandparent = path.getParentNode(1)
+  const greatGrandparent = path.getParentNode(2)
+  
+  // Pattern: if_expression -> expression/simple_expression -> modification -> X
+  // where X is element_modification or named_argument (not declaration)
+  if (parent?.type === 'expression' || parent?.type === 'simple_expression') {
+    if (grandparent?.type === 'modification') {
+      // Check what the modification belongs to
+      if (greatGrandparent?.type === 'element_modification' ||
+          greatGrandparent?.type === 'named_argument') {
+        return true
+      }
+    }
+  }
+  
+  // Also check for equation-level assignments: x = if ...
+  // Pattern: if_expression -> expression -> simple_equation
+  // In this case, the if appears on the same line as `x =`, so we need indent
+  if ((parent?.type === 'simple_expression' || parent?.type === 'expression') && 
+      grandparent?.type === 'simple_equation') {
+    return true
+  }
+  
+  return false
+}
+
+
 
 
 /**
@@ -984,20 +1100,28 @@ export const printModelica: Printer<ASTNode>['print'] = (
     case 'if_equation':
     case 'if_statement': {
       const parts: Doc[] = ['if ']
-      let inElse = false
+      let statementListCount = 0
 
       for (let i = 0; i < node.children.length; i++) {
         const child = node.children[i]
-        if (child.type === 'expression' && !inElse) {
+        if (child.type === 'expression') {
           parts.push(path.call(print, 'children', i), ' then')
         } else if (child.type === 'equation_list' || child.type === 'statement_list') {
-          parts.push(indent([line, path.call(print, 'children', i)]))
+          statementListCount++
+          if (statementListCount === 1) {
+            // First statement_list is the then branch
+            parts.push(indent([line, path.call(print, 'children', i)]))
+          } else {
+            // Second statement_list is the else branch (no elseif in between)
+            parts.push(hardline, 'else')
+            parts.push(indent([line, path.call(print, 'children', i)]))
+          }
         } else if (child.type === 'else_if_equation_clause_list' ||
                    child.type === 'else_if_statement_clause_list') {
           parts.push(hardline, path.call(print, 'children', i))
-        } else if (child.text === 'else') {
-          inElse = true
-          parts.push(hardline, 'else')
+        } else if (child.type === 'else_clause') {
+          // Handle else_clause node which contains the else branch
+          parts.push(hardline, path.call(print, 'children', i))
         }
       }
 
@@ -1167,23 +1291,15 @@ export const printModelica: Printer<ASTNode>['print'] = (
       const children = node.children
       let childIdx = 0
 
-      // Check if this is a simple if-then-else that can fit on one line
-      const nodeText = node.text ?? ''
-      const hasElseIf = children.some(c => c.type === 'else_if_clause')
-      const isSimple = !hasElseIf && nodeText.length < 80
-
-      if (isSimple) {
-        // Format simple if-then-else as flat - no internal breaks
-        const condition = children[0] ? path.call(print, 'children', 0) : ''
-        const thenExpr = children[1] ? path.call(print, 'children', 1) : ''
-        const elseExpr = children[2] ? path.call(print, 'children', 2) : ''
-        return ['if ', condition, ' then ', thenExpr, ' else ', elseExpr]
-      }
+      // Use centralized continuation context detection
+      const inContinuation = isInContinuationContext(path)
+      const midLine = isMidLineIfExpression(path)
 
       // Collect all parts for proper grouping and line breaking
       const conditionParts: Doc[] = []
-      const thenParts: Doc[] = []
-      const elseParts: Doc[] = []
+      let thenExprDoc: Doc = ''
+      let elseExprDoc: Doc = ''
+      const elseIfParts: Doc[] = []
 
       // First child is condition
       if (children[childIdx]) {
@@ -1192,8 +1308,8 @@ export const printModelica: Printer<ASTNode>['print'] = (
       }
 
       // Then expression (after 'then')
-      if (children[childIdx]) {
-        thenParts.push(path.call(print, 'children', childIdx))
+      if (children[childIdx] && children[childIdx].type !== 'else_if_clause') {
+        thenExprDoc = path.call(print, 'children', childIdx)
         childIdx++
       }
 
@@ -1201,29 +1317,105 @@ export const printModelica: Printer<ASTNode>['print'] = (
       while (childIdx < children.length) {
         const child = children[childIdx]
         if (child.type === 'else_if_clause') {
-          elseParts.push(line, path.call(print, 'children', childIdx))
+          // elseif should be at same level as if/then/else
+          // Use line (not softline) to ensure space before elseif when group doesn't break
+          elseIfParts.push(line, path.call(print, 'children', childIdx))
         } else {
           // else expression
-          elseParts.push(line, 'else ', path.call(print, 'children', childIdx))
+          elseExprDoc = path.call(print, 'children', childIdx)
         }
         childIdx++
       }
 
-      // Format with proper line breaking support
-      // then/else aligned with if keyword (no indent)
-      return group([
-        'if ', ...conditionParts,
-        line,
-        group([
-          'then ', ...thenParts,
-          ...elseParts
+      // Check if then expression starts with something complex that needs its own line
+      // Only nested if-expressions need special handling - let binary expressions handle their own breaks
+      // Handle cases like "(\nif..." where paren is followed by newline
+      const thenExprText = (children[1]?.text ?? '').replace(/^\s+/, '').replace(/^\(\s*/, '(')
+      const thenStartsWithComplexExpr = thenExprText.startsWith('(if') || 
+        thenExprText.startsWith('if')
+
+      // Build then clause:
+      // - Always keep "then" with condition using line (becomes space if fits)
+      // - Complex expressions (nested if): indent the value on next line
+      // - Simple expressions: keep "then VALUE" together
+      const thenClause: Doc = thenStartsWithComplexExpr
+        ? ['then', indent([line, thenExprDoc])]
+        : ['then ', thenExprDoc]
+      
+      // For condition+then grouping, we want "if COND then" to stay together
+      // even when then-value is complex. Use a separate group for condition+then keyword.
+      const conditionThenKeyword: Doc = group(['if ', ...conditionParts, ' then'])
+
+      // Build else clause similarly
+      const elseClause: Doc = ['else ', elseExprDoc]
+
+      // Centralized formatting:
+      // Key insight: use line (not softline) between condition and then when condition is long
+      // This ensures "if COND then" stays together for short conditions
+      
+      if (inContinuation) {
+        // Already indented by parent - keep keywords aligned, no extra indent
+        // Use inner group for condition+then keyword so they stay together when they fit
+        // Then-value goes on next line if complex
+        if (thenStartsWithComplexExpr) {
+          return group([
+            conditionThenKeyword,
+            indent([line, thenExprDoc]),
+            ...elseIfParts,
+            line, elseClause
+          ])
+        }
+        return group([
+          group(['if ', ...conditionParts, line, thenClause]),
+          ...elseIfParts,
+          line, elseClause
         ])
+      }
+
+      if (midLine) {
+        // Mid-line if (e.g., `name=if ...`) - indent continuation from the if keyword
+        // Use inner group for condition+then keyword so they stay together when they fit
+        // When inner group breaks, indent the then clause
+        if (thenStartsWithComplexExpr) {
+          return group([
+            conditionThenKeyword,
+            indent([
+              line, thenExprDoc,
+              ...elseIfParts,
+              line, elseClause
+            ])
+          ])
+        }
+        return group([
+          'if ', ...conditionParts,
+          indent([
+            group([line, thenClause]),
+            ...elseIfParts,
+            line, elseClause
+          ])
+        ])
+      }
+
+      // Top-level RHS - keywords (if, then, else) align at same level
+      // Use inner group for condition+then keyword so they stay together when they fit
+      if (thenStartsWithComplexExpr) {
+        return group([
+          conditionThenKeyword,
+          indent([line, thenExprDoc]),
+          ...elseIfParts,
+          line, elseClause
+        ])
+      }
+      return group([
+        group(['if ', ...conditionParts, line, thenClause]),
+        ...elseIfParts,
+        line, elseClause
       ])
     }
 
     case 'else_if_clause': {
       const conditionParts: Doc[] = []
-      const thenParts: Doc[] = []
+      let thenExprDoc: Doc = ''
       let seenCondition = false
 
       for (let i = 0; i < node.children.length; i++) {
@@ -1231,17 +1423,18 @@ export const printModelica: Printer<ASTNode>['print'] = (
           conditionParts.push(path.call(print, 'children', i))
           seenCondition = true
         } else {
-          thenParts.push(path.call(print, 'children', i))
+          thenExprDoc = path.call(print, 'children', i)
         }
       }
+      
+      // Use line between condition and then - Prettier will keep together if fits
+      // or break if line exceeds width
       return group([
-        'elseif ',
-        ...conditionParts,
-        line,
-        'then ',
-        ...thenParts
+        'elseif ', ...conditionParts, line,
+        'then ', thenExprDoc
       ])
     }
+
 
     case 'simple_expression':
       return printChildren(path, print)
@@ -1316,11 +1509,15 @@ export const printModelica: Printer<ASTNode>['print'] = (
           // Build flat structure with sibling groups, same as arithmetic operators.
           // Each operator+operand pair is an independent group that decides
           // whether to break based on remaining space on the current line.
-          // This avoids cascading indentation when mixed and/or operators nest.
+          // All continuations in the same flattened chain share the same indent level.
           const parts: Doc[] = [operands[0]]
 
           for (let i = 0; i < ops.length; i++) {
-            parts.push(' ', ops[i], group([line, operands[i + 1]]))
+            // Use centralized handler for first operand, simple line for rest
+            // This ensures only +1 indent level for the entire chain
+            parts.push(' ', ops[i], i === 0 
+              ? wrapContinuation(operands[i + 1], path)
+              : group([line, operands[i + 1]]))
           }
 
           return parts
@@ -1410,13 +1607,15 @@ export const printModelica: Printer<ASTNode>['print'] = (
           }
 
           // Build flat structure: first operand, then sibling groups for each subsequent
+          // All continuations in the same flattened chain share the same indent level.
           const parts: Doc[] = [operands[0]]
 
           for (let i = 0; i < ops.length; i++) {
-            // Each operator+operand pair is wrapped in its own group.
-            // The group independently decides whether to break based on
-            // whether its content fits on the remaining line space.
-            parts.push(' ', ops[i], group([line, operands[i + 1]]))
+            // Use centralized handler for first operand, simple line for rest
+            // This ensures only +1 indent level for the entire chain
+            parts.push(' ', ops[i], i === 0
+              ? wrapContinuation(operands[i + 1], path)
+              : group([line, operands[i + 1]]))
           }
 
           return parts
@@ -1476,10 +1675,11 @@ export const printModelica: Printer<ASTNode>['print'] = (
       return node.text ?? ''
 
     case 'parenthesized_expression': {
-      // Wrap in parens - use indent for line breaks in content
-      // Don't create a new group - let parent control breaking
+      // Wrap in parens with indent for multi-line content
+      // Content starts on same line as '(', breaks with indent if needed
+      // The isInContinuationContext check prevents nested constructs from adding more indent
       const content = path.map(print, 'children')
-      return ['(', indent(content), ')']
+      return group(['(', indent(content), ')'])
     }
 
     case 'output_expression_list':
@@ -1658,6 +1858,20 @@ export const printModelica: Printer<ASTNode>['print'] = (
       }
       const args = path.map(print, 'children')
       const inAnnotation = isInsideAnnotation(path)
+      
+      // Check if we're directly inside a named_argument to avoid cumulative indent
+      // named_argument already adds indent, so we shouldn't add more
+      const isInNamedArgument = (() => {
+        // Walk up parent chain looking for named_argument before hitting function_call_args boundary
+        for (let i = 0; i < 10; i++) {
+          const ancestor = path.getParentNode(i)
+          if (!ancestor) break
+          if (ancestor.type === 'named_argument') return true
+          if (ancestor.type === 'function_call_args' && i > 0) break // Another function_call_args = nested call
+          if (ancestor.type === 'declaration' || ancestor.type === 'component_declaration') break
+        }
+        return false
+      })()
 
       if (inAnnotation) {
         // Get the parent to check what kind of function this is
@@ -1767,6 +1981,15 @@ export const printModelica: Printer<ASTNode>['print'] = (
         // - Try to fit everything on one line
         // - If it doesn't fit, break after opening paren and indent all args
         // - Closing paren on same line as last arg
+        // - If inside named_argument, skip indent (parent already provides it)
+        if (isInNamedArgument) {
+          return group([
+            '(',
+            softline,
+            join([',', line], individualArgs),
+            ')',
+          ])
+        }
         return group([
           '(',
           indent([
@@ -1778,6 +2001,14 @@ export const printModelica: Printer<ASTNode>['print'] = (
       }
 
       // Fallback - same pattern
+      if (isInNamedArgument) {
+        return group([
+          '(',
+          softline,
+          join([',', line], args),
+          ')',
+        ])
+      }
       return group([
         '(',
         indent([
@@ -1846,20 +2077,14 @@ export const printModelica: Printer<ASTNode>['print'] = (
 
     case 'named_argument': {
       const parts: Doc[] = []
-      const inAnnotation = isInsideAnnotation(path)
 
       for (let i = 0; i < node.children.length; i++) {
         const child = node.children[i]
         if (child.type === 'IDENT') {
           parts.push(child.text ?? '', '=')
         } else {
-          // In annotations, don't add extra indent - top-level annotation already handles it
-          // In non-annotation contexts, wrap expression in indent for continuation lines
-          if (inAnnotation) {
-            parts.push(path.call(print, 'children', i))
-          } else {
-            parts.push(indent(path.call(print, 'children', i)))
-          }
+          // Add indent for continuation lines when value breaks
+          parts.push(indent(path.call(print, 'children', i)))
         }
       }
       return parts

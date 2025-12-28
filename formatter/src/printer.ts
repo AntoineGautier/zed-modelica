@@ -131,8 +131,9 @@ function isMidLineIfExpression(path: AstPath<ASTNode>): boolean {
 /**
  * Simple HTML formatter for documentation strings
  * Enforces line length while preserving structure and never breaking within words/tags
+ * @param removeEmptyLines - If true, removes all empty lines from the output
  */
-function formatHTMLString(html: string, maxWidth: number = 80, baseIndent: string = ''): string {
+function formatHTMLString(html: string, maxWidth: number = 80, baseIndent: string = '', removeEmptyLines: boolean = true): string {
   const lines: string[] = []
   let currentLine = baseIndent
 
@@ -192,7 +193,13 @@ function formatHTMLString(html: string, maxWidth: number = 80, baseIndent: strin
     lines.push(currentLine.trimEnd())
   }
 
-  return lines.join('\n')
+  let result = lines.join('\n')
+  
+  if (removeEmptyLines) {
+    result = result.split('\n').filter(line => line.trim().length > 0).join('\n')
+  }
+
+  return result
 }
 
 /**

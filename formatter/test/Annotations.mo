@@ -4,7 +4,8 @@ replaceable package Medium=Buildings.Media.Water
   constrainedby Modelica.Media.Interfaces.PartialMedium
   "Medium model for all four fluid circuits"
   annotation (choices(
-    choice(redeclare package Medium=Buildings.Media.Water "Water"),
+    choice(redeclare package Medium=Buildings.Media.Water
+    "Water"),
     choice(redeclare replaceable package Medium =
           Buildings.Media.Antifreeze.PropyleneGlycolWater (
       property_T=293.15,X_a=0.40)

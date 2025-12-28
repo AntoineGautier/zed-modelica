@@ -137,7 +137,6 @@ the clear input <code>clr</code> is <code>true</code>).
 <img src=\"modelica://Buildings/Resources/Images/Controls/OBC/CDL/Logical/Latch.png\"
       alt=\"Latch.png\" />
 </p>
-
 </html>",
     revisions="<html>
 <ul>

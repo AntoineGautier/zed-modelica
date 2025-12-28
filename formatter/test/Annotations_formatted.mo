@@ -1,25 +1,59 @@
-within Buildings.Controls.OBC.CDL.Logical;
-block Latch
-  "Maintains a true signal until cleared"
-  Buildings.Controls.OBC.CDL.Interfaces.BooleanInput u
-    "Latch input"
-    annotation(Placement(transformation(extent={{-140,-20},{-100,20}})));
-  Buildings.Controls.OBC.CDL.Interfaces.BooleanInput clr
-    "Clear input"
-    annotation(Placement(transformation(extent={{-140,-80},{-100,-40}})));
-  Buildings.Controls.OBC.CDL.Interfaces.BooleanOutput y
-    "Output with latched signal"
-    annotation(Placement(transformation(extent={{100,-20},{140,20}})));
-initial equation
-  y = not clr and u;
+within ;
+model Annotations
+  parameter Boolean is_dpBalYPumSetCal(start=false) = false
+    "Set to true to automatically size balancing valves or evaluate pump speed providing design flow"
+    annotation(Evaluate=true,
+      Dialog(tab="Advanced",
+        enable=typDis == Buildings.Templates.Plants.HeatPumps.Types.Distribution.Constant1Variable2));
+  replaceable Buildings.Templates.AirHandlersFans.Components.OutdoorSection.SingleDamper secOut
+    constrainedby Buildings.Templates.AirHandlersFans.Components.Interfaces.PartialOutdoorSection (
+      redeclare final package MediumAir=MediumAir,
+      final energyDynamics=energyDynamics,
+      final allowFlowReversal=allowFlowReversal,
+      final dat=dat,
+      final have_recHea=have_recHea,
+      final typCtlEco=typCtlEco)
+    "Outdoor air section"
+    annotation(choices(choice(redeclare replaceable Buildings.Templates.AirHandlersFans.Components.OutdoorSection.SingleDamper secOut
+      "Single damper for ventilation and economizer, with airflow measurement station"),
+      choice(redeclare replaceable Buildings.Templates.AirHandlersFans.Components.OutdoorSection.DedicatedDampersAirflow secOut
+        "Separate dampers for ventilation and economizer, with airflow measurement station"),
+      choice(redeclare replaceable Buildings.Templates.AirHandlersFans.Components.OutdoorSection.DedicatedDampersPressure secOut
+        "Separate dampers for ventilation and economizer, with differential pressure sensor")),
+      Dialog(group="Configuration"),
+      Placement(transformation(extent={{-58,-94},{-22,-66}})));
+  Buildings.Templates.Components.Interfaces.Bus bus if typ <> Buildings.Templates.Components.Types.Valve.None
+    "Control bus"
+    annotation(Placement(transformation(extent={{-20,-20},{20,20}},
+      rotation=0,
+      origin={0,160}),
+      iconTransformation(extent={{-10,-10},{10,10}},
+        rotation=0,
+        origin={0,100})));
 equation
-  when {clr, u} then
-    y = not clr and u;
-  end when;
+  connect(TChiWatPriSup.port_b, tanChiWatSup.port_a)
+    annotation(Line(points={{70,80},{120,80}},
+      color={0,0,0},
+      thickness=0.5,
+      visible=have_chiWat));
+  connect(tanChiWatSup.port_b, junChiWatBypSup.port_1)
+    annotation(Line(points={{140,80},{170,80}},
+      color={0,0,0},
+      thickness=0.5,
+      visible=have_chiWat));
+  connect(junChiWatBypRet.port_2, tanChiWatRet.port_a)
+    annotation(Line(points={{170,0},{140,0}},
+      color={0,0,0},
+      thickness=0.5,
+      visible=have_chiWat,
+      pattern=LinePattern.Dash));
 annotation(defaultComponentName="lat",
   Icon(coordinateSystem(preserveAspectRatio=true,
     extent={{-100,-100},{100,100}}),
-    graphics={Rectangle(extent={{-100,100},{100,-100}},
+    graphics={Bitmap(visible=typFanRet == Buildings.Templates.Components.Types.Fan.SingleVariable,
+      extent={{540,500},{340,700}},
+      fileName="modelica://Buildings/Resources/Images/Templates/Components/Fans/Housed.svg"),
+    Rectangle(extent={{-100,100},{100,-100}},
       fillColor={210,210,210},
       fillPattern=FillPattern.Solid,
       borderPattern=BorderPattern.Raised),
@@ -87,7 +121,7 @@ the clear input <code>clr</code> is <code>true</code>).
 </p>
 <p align=\"center\">
 <img src=\"modelica://Buildings/Resources/Images/Controls/OBC/CDL/Logical/Latch.png\"
-     alt=\"Latch.png\" />
+      alt=\"Latch.png\" />
 </p>
 
 </html>",
@@ -144,4 +178,4 @@ implementation.
 </li>
 </ul>
 </html>"));
-end Latch;
+end Annotations;

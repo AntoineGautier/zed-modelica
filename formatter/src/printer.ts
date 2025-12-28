@@ -8,7 +8,7 @@ import { doc } from 'prettier'
 import type { ASTNode } from './parser.js'
 
 const { builders } = doc
-const { group, indent, line, softline, hardline, join, fill, breakParent } = builders
+const { group, indent, line, softline, hardline, join, fill } = builders
 
 
 
@@ -19,10 +19,10 @@ const { group, indent, line, softline, hardline, join, fill, breakParent } = bui
 function formatHTMLString(html: string, maxWidth: number = 80, baseIndent: string = ''): string {
   const lines: string[] = []
   let currentLine = baseIndent
-  
+
   // Split on tags and text, preserving structure
   const tokens = html.match(/(<[^>]+>|[^<]+)/g) || []
-  
+
   for (const token of tokens) {
     if (token.startsWith('<')) {
       // This is a tag - add it to current line
@@ -42,15 +42,15 @@ function formatHTMLString(html: string, maxWidth: number = 80, baseIndent: strin
         const leadingSpace = token.match(/^\s*/)?.[0] || ''
         const trailingSpace = token.match(/\s*$/)?.[0] || ''
         const trimmedToken = token.trim()
-        
+
         if (trimmedToken) {
           const words = trimmedToken.split(/\s+/)
-          
+
           for (let i = 0; i < words.length; i++) {
             const word = words[i]
             const isFirst = i === 0
             const isLast = i === words.length - 1
-            
+
             if (currentLine.length + (isFirst ? leadingSpace.length : 1) + word.length > maxWidth && currentLine.trim().length > 0) {
               // Start new line
               lines.push(currentLine.trimEnd())
@@ -71,11 +71,11 @@ function formatHTMLString(html: string, maxWidth: number = 80, baseIndent: strin
       }
     }
   }
-  
+
   if (currentLine.trim().length > 0) {
     lines.push(currentLine.trimEnd())
   }
-  
+
   return lines.join('\n')
 }
 
@@ -107,8 +107,8 @@ function isFirstLevelAnnotationAttribute(path: AstPath<ASTNode>): boolean {
     // Walk up to find if parent is class_modification and grandparent is annotation_clause
     const grandparent = path.getParentNode(1) // might be class_modification
     const greatGrandparent = path.getParentNode(2) // might be annotation_clause
-    
-    return grandparent?.type === 'class_modification' && 
+
+    return grandparent?.type === 'class_modification' &&
            greatGrandparent?.type === 'annotation_clause'
   } catch {
     return false
@@ -119,29 +119,148 @@ function isFirstLevelAnnotationAttribute(path: AstPath<ASTNode>): boolean {
  * Check if we're inside a first-level annotation attribute
  * (anywhere inside Diagram, Icon, Placement, etc. that are direct children of annotation)
  */
-function isInsideFirstLevelAnnotationAttribute(path: AstPath<ASTNode>): boolean {
+
+
+/**
+ * List of graphical primitive names in Modelica annotations
+ */
+const GRAPHICAL_PRIMITIVES = new Set([
+  'Rectangle', 'Ellipse', 'Line', 'Polygon', 'Text', 'Bitmap',
+  'Arc', 'BezierCurve', 'FilledShape', 'PointArray'
+])
+
+/**
+ * Check if a node represents a graphical primitive function call
+ */
+function isGraphicalPrimitive(node: ASTNode): boolean {
+  if (node.type !== 'function_application') return false
+  // Get the function name from the first child (component_reference or name)
+  const nameChild = node.children.find(c => c.type === 'component_reference' || c.type === 'name')
+  if (!nameChild) return false
+  // Get the identifier text
+  const ident = nameChild.text?.split('.').pop() || ''
+  return GRAPHICAL_PRIMITIVES.has(ident)
+}
+
+/**
+ * Check if this is a graphics array (graphics={...})
+ * The path structure for array_constructor inside graphics={} is:
+ *   array_constructor -> primary_expression -> simple_expression -> expression -> modification -> element_modification
+ * So we need to walk up ~5 levels to find the element_modification with name 'graphics'
+ */
+function isGraphicsArray(path: AstPath<ASTNode>): boolean {
+  try {
+    // Walk up the parent chain looking for element_modification with name 'graphics'
+    for (let depth = 0; depth < 10; depth++) {
+      const node = path.getParentNode(depth)
+      if (!node) break
+
+      if (node.type === 'element_modification') {
+        const nameChild = node.children.find(c => c.type === 'name')
+        if (nameChild?.text === 'graphics') return true
+        // If we found an element_modification but it's not 'graphics', stop looking
+        break
+      }
+
+      // Stop if we hit the annotation boundary
+      if (node.type === 'annotation_clause') break
+    }
+  } catch {
+    // Ignore
+  }
+  return false
+}
+
+/**
+ * Check if this is a choices annotation (choices(...))
+ */
+
+
+/**
+ * Check if this is inside a choices annotation
+ */
+function isInsideChoicesAnnotation(path: AstPath<ASTNode>): boolean {
   try {
     let depth = 0
     while (depth < 20) {
       const node = path.getParentNode(depth)
       if (!node) break
-      
-      // Check if this node is a function_call_args for a first-level attribute
-      if (node.type === 'function_call_args') {
-        const grandparent = path.getParentNode(depth + 1)
-        const greatGrandparent = path.getParentNode(depth + 2)
-        if (grandparent?.type === 'class_modification' && 
-            greatGrandparent?.type === 'annotation_clause') {
-          return true
-        }
+      if (node.type === 'element_modification') {
+        const nameChild = node.children.find(c => c.type === 'name')
+        if (nameChild?.text === 'choices') return true
       }
-      
-      // Stop if we hit the annotation boundary
       if (node.type === 'annotation_clause') break
       depth++
     }
   } catch {
-    // Ignore errors
+    // Ignore
+  }
+  return false
+}
+
+/**
+ * Check if an array contains only numeric/coordinate data (should stay compact)
+ */
+function isCoordinateArray(node: ASTNode): boolean {
+  if (node.type !== 'array_constructor' && node.type !== 'array_arguments') return false
+
+  // Check if all children are simple literals or nested coordinate arrays
+  const isSimple = (n: ASTNode): boolean => {
+    // Literal numbers
+    if (n.type === 'literal_expression' || n.type === 'UNSIGNED_INTEGER' ||
+        n.type === 'UNSIGNED_REAL' || n.type === 'number') return true
+    // Negated numbers
+    if (n.type === 'unary_expression' && n.children.length <= 2) {
+      return n.children.every(c => isSimple(c) || c.type === 'IDENT')
+    }
+    // Simple expressions that are just numbers
+    if (n.type === 'simple_expression' || n.type === 'expression' || n.type === 'primary_expression') {
+      return n.children.every(c => isSimple(c))
+    }
+    // Nested arrays (for {{x,y},{x,y}})
+    if (n.type === 'array_constructor' || n.type === 'array_arguments') {
+      return n.children.every(c => isSimple(c))
+    }
+    // Component references that look like enum values or simple identifiers
+    if (n.type === 'component_reference' || n.type === 'IDENT') return true
+    return false
+  }
+
+  return node.children.every(c => isSimple(c))
+}
+
+/**
+ * Get the name of a function application or element modification
+ */
+function getAnnotationElementName(node: ASTNode): string | null {
+  if (node.type === 'function_application') {
+    const nameChild = node.children.find(c => c.type === 'component_reference' || c.type === 'name')
+    return nameChild?.text?.split('.').pop() || null
+  }
+  if (node.type === 'element_modification') {
+    const nameChild = node.children.find(c => c.type === 'name')
+    return nameChild?.text || null
+  }
+  return null
+}
+
+/**
+ * Check if we're inside a graphical primitive (Rectangle, Line, etc.)
+ */
+function isInsideGraphicalPrimitive(path: AstPath<ASTNode>): boolean {
+  try {
+    let depth = 0
+    while (depth < 20) {
+      const node = path.getParentNode(depth)
+      if (!node) break
+      if (node.type === 'function_application' && isGraphicalPrimitive(node)) {
+        return true
+      }
+      if (node.type === 'annotation_clause') break
+      depth++
+    }
+  } catch {
+    // Ignore
   }
   return false
 }
@@ -171,10 +290,10 @@ export const printModelica: Printer<ASTNode>['print'] = (
     case 'UNSIGNED_INTEGER':
     case 'UNSIGNED_REAL':
       return node.text ?? ''
-    
+
     case 'STRING': {
       const text = node.text ?? ''
-      
+
       // Check if this is HTML documentation in an annotation
       const inAnnotation = isInsideAnnotation(path)
       if (inAnnotation && text.includes('<html>')) {
@@ -187,7 +306,7 @@ export const printModelica: Printer<ASTNode>['print'] = (
           return `"${formatted}"`
         }
       }
-      
+
       return text
     }
 
@@ -328,16 +447,41 @@ export const printModelica: Printer<ASTNode>['print'] = (
         parts.push(prefix, ' ')
       }
 
+      // Check if this named_element has a constraining_clause (for replaceable components)
+      const hasConstrainingClause = node.children.some(c => c.type === 'constraining_clause')
+      const hasDescriptionString = node.children.some(c => c.type === 'description_string')
+      const hasAnnotationClause = node.children.some(c => c.type === 'annotation_clause')
+
       for (let i = 0; i < node.children.length; i++) {
         const child = node.children[i]
         if (child.type === 'component_clause') {
           parts.push(path.call(print, 'children', i))
-          parts.push(';')
+          // Don't add semicolon here if there are more clauses to follow
+          if (!hasConstrainingClause && !hasDescriptionString && !hasAnnotationClause) {
+            parts.push(';')
+          }
         } else if (child.type === 'class_definition') {
           parts.push(path.call(print, 'children', i))
+        } else if (child.type === 'constraining_clause') {
+          // constraining_clause comes after component_clause for replaceable components
+          parts.push(indent([line, path.call(print, 'children', i)]))
+        } else if (child.type === 'description_string') {
+          // Description string comes after constraining_clause or component_clause
+          parts.push(indent([line, path.call(print, 'children', i)]))
+        } else if (child.type === 'annotation_clause') {
+          // Annotation clause comes last
+          parts.push(indent([line, path.call(print, 'children', i)]))
         }
       }
-      return parts
+
+      // Add semicolon at the end if we have constraining_clause, description_string, or annotation_clause
+      if (hasConstrainingClause || hasDescriptionString || hasAnnotationClause) {
+        // Only add semicolon if we had a component_clause (not a class_definition)
+        if (node.children.some(c => c.type === 'component_clause')) {
+          parts.push(';')
+        }
+      }
+      return group(parts)
     }
 
     case 'import_clause':
@@ -397,13 +541,13 @@ export const printModelica: Printer<ASTNode>['print'] = (
     case 'component_declaration': {
       const parts: Doc[] = []
       let hasModification = false
-      
+
       // Check if declaration has a modification (class_modification with arguments)
       const decl = node.children.find(c => c.type === 'declaration')
       if (decl) {
         hasModification = decl.children.some(c => c.type === 'modification')
       }
-      
+
       for (let i = 0; i < node.children.length; i++) {
         const child = node.children[i]
         if (child.type === 'declaration') {
@@ -464,7 +608,6 @@ export const printModelica: Printer<ASTNode>['print'] = (
       // Top-level assignments get spaces around =, attribute bindings don't
       const parent = path.getParentNode()
       const isTopLevelAssignment = parent?.type === 'declaration'
-      const inAnnotation = isInsideAnnotation(path)
 
       for (let i = 0; i < node.children.length; i++) {
         const child = node.children[i]
@@ -481,12 +624,8 @@ export const printModelica: Printer<ASTNode>['print'] = (
           } else {
             // For attribute bindings: no space around =
             // In annotations, don't add indent to keep compact
-            if (inAnnotation) {
-              parts.push('=', path.call(print, 'children', i))
-            } else {
-              // Wrap expression in indent so any internal line breaks are indented
-              parts.push('=', indent(path.call(print, 'children', i)))
-            }
+            // Don't add indent here - function calls and other expressions handle their own indentation
+            parts.push('=', path.call(print, 'children', i))
           }
         }
       }
@@ -499,59 +638,147 @@ export const printModelica: Printer<ASTNode>['print'] = (
         return '()'
       }
 
-      const args = path.map(print, 'children')
       const inAnnotation = isInsideAnnotation(path)
 
       if (inAnnotation) {
         const parent = path.getParentNode()
         const isTopLevelAnnotation = parent?.type === 'annotation_clause'
-        
+
         if (isTopLevelAnnotation) {
-          // Top-level annotation: first arg on same line, siblings separated by line breaks
-          // All content inside annotation should be indented
-          if (args.length === 0) {
+          // Top-level annotation: first arg on same line, rest on new lines indented
+          // Format: annotation(first,
+          //   second,
+          //   third)
+          // Closing paren stays on same line as last element
+          // We need to get the actual element_modification children from the argument_list
+          const argListNode = node.children.find(c => c.type === 'argument_list')
+          if (!argListNode || argListNode.children.length === 0) {
             return '()'
           }
-          if (args.length === 1) {
-            return group(['(', indent(args[0]), ')'])
+
+          // Find the index of argument_list to use path.call properly
+          const argListIndex = node.children.findIndex(c => c.type === 'argument_list')
+
+          // Get individual element arguments by mapping over argument_list's children
+          const elementArgs: Doc[] = []
+          for (let i = 0; i < argListNode.children.length; i++) {
+            elementArgs.push(path.call(print, 'children', argListIndex, 'children', i))
+          }
+
+          if (elementArgs.length === 1) {
+            // Single arg: keep on same line if short
+            return group(['(', elementArgs[0], ')'])
+          }
+
+          // Multiple args: first inline, rest indented on new lines
+          // Use hardline to force breaks between top-level elements
+          // Closing paren on same line as last element
+          return [
+            '(',
+            elementArgs[0],
+            ',',
+            indent([hardline, join([',', hardline], elementArgs.slice(1)), ')']),
+          ]
+        } else {
+          // Nested annotations - check context for formatting
+          // Check if we're inside a choices annotation - each choice on its own line
+          if (isInsideChoicesAnnotation(path)) {
+            const argListNode = node.children.find(c => c.type === 'argument_list')
+            if (!argListNode || argListNode.children.length === 0) {
+              return '()'
+            }
+            const argListIndex = node.children.findIndex(c => c.type === 'argument_list')
+            const elementArgs: Doc[] = []
+            for (let i = 0; i < argListNode.children.length; i++) {
+              elementArgs.push(path.call(print, 'children', argListIndex, 'children', i))
+            }
+            if (elementArgs.length === 1) {
+              return ['(', elementArgs[0], ')']
+            }
+            // First choice on same line, rest on new lines with indent
+            // Closing paren on same line as last element
+            return [
+              '(',
+              elementArgs[0],
+              ',',
+              indent([hardline, join([',', hardline], elementArgs.slice(1)), ')']),
+            ]
           }
           
-          // Multiple args: first inline, rest indented on new lines
-          return group([
-            '(',
-            indent([
-              args[0],
+          // For nested class_modifications in annotations (like Icon(...), Placement(...)),
+          // use the same "first inline, rest on new lines" pattern
+          // Closing paren stays on same line as last element
+          const argListNode = node.children.find(c => c.type === 'argument_list')
+          if (argListNode && argListNode.children.length > 0) {
+            const argListIndex = node.children.findIndex(c => c.type === 'argument_list')
+            const elementArgs: Doc[] = []
+            for (let i = 0; i < argListNode.children.length; i++) {
+              elementArgs.push(path.call(print, 'children', argListIndex, 'children', i))
+            }
+            if (elementArgs.length === 1) {
+              return ['(', elementArgs[0], ')']
+            }
+            // First arg on same line, rest indented on new lines, closing paren on same line as last
+            return [
+              '(',
+              elementArgs[0],
               ',',
-              line,
-              join([',', line], args.slice(1))
-            ]),
-            ')'
-          ])
-        } else {
-          // Nested annotations: try to fit on one line, but break if too long
+              indent([hardline, join([',', hardline], elementArgs.slice(1)), ')']),
+            ]
+          }
+          
+          const args = path.map(print, 'children')
           if (args.length === 0) {
             return '()'
           }
           if (args.length === 1) {
             return group(['(', args[0], ')'])
           }
-          return group(['(', join([',', line], args), ')'])
+          // Fallback for nested class modifications
+          // Closing paren stays on same line as last element
+          return group([
+            '(',
+            indent([softline, join([',', line], args), ')']),
+          ])
         }
       }
 
       // Normal formatting with line breaks
+      // Closing paren stays on same line as last element
+      const args = path.map(print, 'children')
       return group([
         '(',
-        indent([softline, join([',', line], args)]),
-        ')'
+        indent([softline, join([',', line], args), ')']),
       ])
     }
 
     case 'argument_list': {
       const inAnnotation = isInsideAnnotation(path)
       if (inAnnotation) {
-        // Use fill to pack as many arguments as possible on each line
         const args = path.map(print, 'children')
+
+        // Check if we're inside choices - each choice on its own line
+        if (isInsideChoicesAnnotation(path)) {
+          return join([',', line], args)
+        }
+
+        // Check if inside a graphical primitive - parameters one per line
+        if (isInsideGraphicalPrimitive(path)) {
+          return join([',', line], args)
+        }
+
+        // Check if this is the top-level argument_list inside an annotation's class_modification
+        const parent = path.getParentNode()
+        const grandparent = path.getParentNode(1)
+        const isTopLevelAnnotationArgs = parent?.type === 'class_modification' &&
+                                          grandparent?.type === 'annotation_clause'
+
+        if (isTopLevelAnnotationArgs) {
+          // Top-level annotation elements: each on its own line
+          return join([',', line], args)
+        }
+
+        // Default: use fill to pack arguments
         const fillItems: Doc[] = []
         for (let i = 0; i < args.length; i++) {
           if (i > 0) {
@@ -707,15 +934,16 @@ export const printModelica: Printer<ASTNode>['print'] = (
         } else if (child.type === 'annotation_clause') {
           hasAnnotation = true
           parts.push(join(', ', args), ')')
-          // Break line before annotation
-          parts.push(line, path.call(print, 'children', i), ';')
+          // Annotation should be indented relative to connect keyword
+          parts.push(indent([hardline, path.call(print, 'children', i)]))
+          parts.push(';')
         }
       }
 
       if (!hasAnnotation) {
         parts.push(join(', ', args), ');')
       }
-      return group(parts)
+      return parts
     }
 
     case 'for_equation':
@@ -1046,10 +1274,10 @@ export const printModelica: Printer<ASTNode>['print'] = (
           // Flatten same operator only
           const operands: Doc[] = []
           const ops: string[] = []
-          
+
           const flattenLogical = (p: AstPath<ASTNode>): void => {
             const n = p.getValue()
-            
+
             // Check if this is a binary_expression with the SAME logical operator
             if (n.type === 'binary_expression' && n.children?.length === 2) {
               const op = extractOperator(n.text ?? '', n.children[0], n.children[1])
@@ -1078,23 +1306,23 @@ export const printModelica: Printer<ASTNode>['print'] = (
             // Base case - not same operator, print normally
             operands.push(print(p))
           }
-          
+
           flattenLogical(path)
-          
+
           if (ops.length === 0) {
             return operands[0]
           }
-          
+
           // Build flat structure with sibling groups, same as arithmetic operators.
           // Each operator+operand pair is an independent group that decides
           // whether to break based on remaining space on the current line.
           // This avoids cascading indentation when mixed and/or operators nest.
           const parts: Doc[] = [operands[0]]
-          
+
           for (let i = 0; i < ops.length; i++) {
             parts.push(' ', ops[i], group([line, operands[i + 1]]))
           }
-          
+
           return parts
         }
 
@@ -1183,7 +1411,7 @@ export const printModelica: Printer<ASTNode>['print'] = (
 
           // Build flat structure: first operand, then sibling groups for each subsequent
           const parts: Doc[] = [operands[0]]
-          
+
           for (let i = 0; i < ops.length; i++) {
             // Each operator+operand pair is wrapped in its own group.
             // The group independently decides whether to break based on
@@ -1268,48 +1496,55 @@ export const printModelica: Printer<ASTNode>['print'] = (
       const inAnnotation = isInsideAnnotation(path)
 
       if (inAnnotation) {
-        // In annotations, check if this array contains function calls or complex expressions
-        const hasComplexContent = node.children.some(child => {
-          // Check if it's a function application directly
-          if (child.type === 'function_application') return true
-          // Check if it's an expression that contains a function application
-          if (child.type.includes('expression') && child.text?.includes('(')) return true
-          return false
-        })
-        
-        if (hasComplexContent) {
-          // For arrays with function calls (like graphics={Polygon(...),Polygon(...)}),
-          // force each item to start on a new line with proper indentation
+        // Check if this is a coordinate/numerical array - keep compact
+        if (isCoordinateArray(node)) {
+          // Compact format: {1,2,3} or {{1,2},{3,4}}
+          return ['{', join(',', args), '}']
+        }
+
+        // Check if this is a graphics array
+        if (isGraphicsArray(path)) {
+          // Graphics array: first primitive on same line, rest on new lines
           if (args.length === 0) return '{}'
           if (args.length === 1) return ['{', args[0], '}']
-          
-          // Check if we're inside a first-level annotation attribute (like Diagram)
-          const insideFirstLevel = isInsideFirstLevelAnnotationAttribute(path)
-          
-          if (insideFirstLevel) {
-            // Inside first-level: use line breaks that respect parent indentation
-            // Force parent group to break by using ifBreak
-            if (args.length === 0) return '{}'
-            if (args.length === 1) {
-              return ['{', args[0], '}']
-            }
-            // Multiple items: force break and signal parent to break
-            const arrayContent = join([',', line], args)
-            return group([
-              '{',
-              indent([line, arrayContent]),
-              line,
-              '}',
-              breakParent  // Signal parent Diagram group to break
-            ], { shouldBreak: true })
-          } else {
-            // Not inside first-level: use hardline to force breaks
-            return ['{', indent([hardline, join([',', hardline], args)]), hardline, '}']
-          }
+
+          // First primitive on same line as {, rest on new lines
+          return [
+            '{',
+            args[0],
+            ',',
+            indent([hardline, join([',', hardline], args.slice(1))]),
+            '}'
+          ]
         }
-        
-        // Condense coordinate/literal arrays with no spaces: {{1,2},{3,4}}
-        return ['{', ...args, '}']
+
+        // Check if array contains graphical primitives
+        const hasGraphicalPrimitives = node.children.some(child => {
+          if (child.type === 'function_application') return isGraphicalPrimitive(child)
+          // Check through expression wrappers
+          if (child.type.includes('expression')) {
+            const funcApp = child.children?.find(c => c.type === 'function_application')
+            if (funcApp) return isGraphicalPrimitive(funcApp)
+          }
+          return false
+        })
+
+        if (hasGraphicalPrimitives) {
+          // Array of graphical primitives - first on same line, rest on new lines
+          if (args.length === 0) return '{}'
+          if (args.length === 1) return ['{', args[0], '}']
+          return [
+            '{',
+            args[0],
+            ',',
+            indent([hardline, join([',', hardline], args.slice(1))]),
+            '}'
+          ]
+        }
+
+        // Default for other arrays in annotations
+        if (args.length === 0) return '{}'
+        return group(['{', join([',', line], args), '}'])
       }
 
       return group([
@@ -1323,29 +1558,35 @@ export const printModelica: Printer<ASTNode>['print'] = (
     case 'array_arguments': {
       const args = path.map(print, 'children')
       const inAnnotation = isInsideAnnotation(path)
-      
+
       if (inAnnotation) {
-        // Check if this array contains function calls
-        const hasComplexContent = node.children.some(child => {
-          if (child.type === 'function_application') return true
-          if (child.type.includes('expression') && child.text?.includes('(')) return true
+        // Check if this is coordinate data
+        if (isCoordinateArray(node)) {
+          return join(',', args)
+        }
+
+        // Check if this is inside a graphics array
+        if (isGraphicsArray(path)) {
+          // Graphics array elements: use hardline to force each primitive on its own line
+          return join([',', hardline], args)
+        }
+
+        // Check if array contains graphical primitives
+        const hasGraphicalPrimitives = node.children.some(child => {
+          if (child.type === 'function_application') return isGraphicalPrimitive(child)
+          if (child.type.includes('expression')) {
+            const funcApp = child.children?.find(c => c.type === 'function_application')
+            if (funcApp) return isGraphicalPrimitive(funcApp)
+          }
           return false
         })
-        
-        if (hasComplexContent) {
-          // For arrays with function calls, force line breaks
-          // Check if we're inside a first-level annotation attribute
-          const insideFirstLevel = isInsideFirstLevelAnnotationAttribute(path)
-          
-          if (insideFirstLevel) {
-            // Inside first-level: use line breaks that respect parent indentation
-            return join([',', line], args)
-          } else {
-            // Not inside first-level: use hardline
-            return join([',', hardline], args)
-          }
+
+        if (hasGraphicalPrimitives) {
+          // Use hardline to force breaks between graphical primitives
+          return join([',', hardline], args)
         }
-        // In annotations, condense coordinate arrays with no spaces
+
+        // Default: comma-separated without spaces for compact arrays
         return join(',', args)
       }
       return join(', ', args)
@@ -1419,30 +1660,89 @@ export const printModelica: Printer<ASTNode>['print'] = (
       const inAnnotation = isInsideAnnotation(path)
 
       if (inAnnotation) {
-        // Check if this is a first-level annotation attribute
-        const isFirstLevel = isFirstLevelAnnotationAttribute(path)
-        
-        if (isFirstLevel) {
-          // First-level attributes: wrap content in indent
-          // When content breaks, it will get additional indentation
-          if (args.length === 0) return '()'
-          return group(['(', indent([softline, join([',', line], args)]), softline, ')'])
-        } else {
-          // Nested attributes: pack compactly with fill
-          const fillItems: Doc[] = []
-          for (let i = 0; i < args.length; i++) {
-            if (i > 0) {
-              fillItems.push([',', line])
+        // Get the parent to check what kind of function this is
+        const parent = path.getParentNode()
+        const funcName = parent ? getAnnotationElementName(parent) : null
+
+        // Check if this is a graphical primitive - format with line breaks for each parameter
+        // First param on same line as opening paren, rest indented on new lines
+        if (parent && parent.type === 'function_application' && isGraphicalPrimitive(parent)) {
+          // function_call_args children might be named_arguments or function_arguments
+          // We need to extract the actual individual arguments
+          const argsChild = node.children[0]
+          if (argsChild && (argsChild.type === 'named_arguments' || argsChild.type === 'function_arguments')) {
+            const individualArgs: Doc[] = []
+            for (let i = 0; i < argsChild.children.length; i++) {
+              individualArgs.push(path.call(print, 'children', 0, 'children', i))
             }
-            fillItems.push(args[i])
+            if (individualArgs.length === 0) return '()'
+            if (individualArgs.length === 1) return ['(', individualArgs[0], ')']
+            // First param on same line, rest indented on new lines
+            // Closing paren on same line as last element
+            return [
+              '(',
+              individualArgs[0],
+              ',',
+              indent([hardline, join([',', hardline], individualArgs.slice(1)), ')']),
+            ]
           }
-          return group(['(', fill(fillItems), ')'])
+          // Fallback if structure is different
+          if (args.length === 0) return '()'
+          if (args.length === 1) return ['(', args[0], ')']
+          // Closing paren on same line as last element
+          return [
+            '(',
+            args[0],
+            ',',
+            indent([hardline, join([',', hardline], args.slice(1)), ')']),
+          ]
         }
+
+        // Check if this is choices() - each choice on new line
+        // First choice on same line as opening paren
+        if (funcName === 'choices') {
+          if (args.length === 0) return '()'
+          if (args.length === 1) return ['(', args[0], ')']
+          // First choice on same line, rest on new lines
+          // Closing paren on same line as last element
+          return [
+            '(',
+            args[0],
+            ',',
+            indent([hardline, join([',', hardline], args.slice(1)), ')']),
+          ]
+        }
+
+        // Check if this is a first-level annotation attribute (Icon, Diagram, Placement, etc.)
+        const isFirstLevel = isFirstLevelAnnotationAttribute(path)
+
+        if (isFirstLevel) {
+          // First-level attributes like Icon(...), Placement(...)
+          // First arg on same line, rest indented on new lines
+          if (args.length === 0) return '()'
+          if (args.length === 1) return ['(', args[0], ')']
+          // Closing paren on same line as last element
+          return [
+            '(',
+            args[0],
+            ',',
+            indent([hardline, join([',', hardline], args.slice(1)), ')']),
+          ]
+        }
+
+        // Other nested calls - try to keep compact but allow breaks
+        if (args.length === 0) return '()'
+        if (args.length === 1) {
+          return group(['(', args[0], ')'])
+        }
+        // Closing paren on same line as last element
+        return group([
+          '(',
+          indent([softline, join([',', line], args), ')']),
+        ])
       }
 
       // Check if this is a simple single-argument function call
-      // function_call_args has children like function_arguments or named_arguments
-      // We need to check if those have only one actual argument
       const firstChild = node.children[0]
       const isSingleArg = firstChild &&
         (firstChild.type === 'function_arguments' || firstChild.type === 'named_arguments') &&
@@ -1453,10 +1753,38 @@ export const printModelica: Printer<ASTNode>['print'] = (
         return group(['(', args[0], ')'])
       }
 
+      // First arg on same line, rest indented, closing paren on same line as last element
+      // Need to extract individual arguments from function_arguments/named_arguments
+      const argsChild = node.children[0]
+      if (argsChild && (argsChild.type === 'named_arguments' || argsChild.type === 'function_arguments')) {
+        const individualArgs: Doc[] = []
+        for (let i = 0; i < argsChild.children.length; i++) {
+          individualArgs.push(path.call(print, 'children', 0, 'children', i))
+        }
+        if (individualArgs.length === 0) return '()'
+        if (individualArgs.length === 1) return group(['(', individualArgs[0], ')'])
+        // For regular function calls (not in annotations):
+        // - Try to fit everything on one line
+        // - If it doesn't fit, break after opening paren and indent all args
+        // - Closing paren on same line as last arg
+        return group([
+          '(',
+          indent([
+            softline,
+            join([',', line], individualArgs),
+          ]),
+          ')',
+        ])
+      }
+
+      // Fallback - same pattern
       return group([
         '(',
-        indent([softline, join([',', line], args)]),
-        ')'
+        indent([
+          softline,
+          join([',', line], args),
+        ]),
+        ')',
       ])
     }
 
@@ -1464,24 +1792,26 @@ export const printModelica: Printer<ASTNode>['print'] = (
       const inAnnotation = isInsideAnnotation(path)
       if (inAnnotation) {
         const args = path.map(print, 'children')
-        
-        // Check if we're inside a first-level annotation attribute
-        const insideFirstLevel = isInsideFirstLevelAnnotationAttribute(path)
-        
-        if (insideFirstLevel) {
-          // Inside first-level: use line breaks to respect nested content  
+
+        // Check if we're inside choices - each choice on its own line
+        if (isInsideChoicesAnnotation(path)) {
           return join([',', line], args)
-        } else {
-          // Not inside first-level: use fill to pack
-          const fillItems: Doc[] = []
-          for (let i = 0; i < args.length; i++) {
-            if (i > 0) {
-              fillItems.push([',', line])
-            }
-            fillItems.push(args[i])
-          }
-          return fill(fillItems)
         }
+
+        // Check if inside a graphical primitive - parameters one per line
+        if (isInsideGraphicalPrimitive(path)) {
+          return join([',', line], args)
+        }
+
+        // Default: use fill to pack arguments
+        const fillItems: Doc[] = []
+        for (let i = 0; i < args.length; i++) {
+          if (i > 0) {
+            fillItems.push([',', line])
+          }
+          fillItems.push(args[i])
+        }
+        return fill(fillItems)
       }
       return join([',', line], path.map(print, 'children'))
     }
@@ -1489,8 +1819,19 @@ export const printModelica: Printer<ASTNode>['print'] = (
     case 'named_arguments': {
       const inAnnotation = isInsideAnnotation(path)
       if (inAnnotation) {
-        // Use fill to pack as many arguments as possible on each line
         const args = path.map(print, 'children')
+
+        // Check if we're inside choices - each choice on its own line
+        if (isInsideChoicesAnnotation(path)) {
+          return join([',', line], args)
+        }
+
+        // Check if inside a graphical primitive - parameters one per line
+        if (isInsideGraphicalPrimitive(path)) {
+          return join([',', line], args)
+        }
+
+        // Use fill to pack as many arguments as possible on each line
         const fillItems: Doc[] = []
         for (let i = 0; i < args.length; i++) {
           if (i > 0) {
@@ -1580,8 +1921,17 @@ export const printModelica: Printer<ASTNode>['print'] = (
     case 'description_string':
       return printChildren(path, print)
 
-    case 'annotation_clause':
-      return ['annotation', ...printChildren(path, print), ';']
+    case 'annotation_clause': {
+      // Only add semicolon for class-level annotations (parent is long_class_specifier)
+      // For inline annotations (in named_element, component_declaration, connect_clause, etc.),
+      // the parent adds the semicolon
+      const parent = path.getParentNode()
+      const isClassLevel = parent?.type === 'long_class_specifier' || parent?.type === 'short_class_specifier'
+      if (isClassLevel) {
+        return ['annotation', ...printChildren(path, print), ';']
+      }
+      return ['annotation', ...printChildren(path, print)]
+    }
 
     // ===========================================
     // External functions

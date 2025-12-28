@@ -664,13 +664,6 @@ export const printModelica: Printer<ASTNode>['print'] = (
 
     case 'component_declaration': {
       const parts: Doc[] = []
-      let hasModification = false
-
-      // Check if declaration has a modification (class_modification with arguments)
-      const decl = node.children.find(c => c.type === 'declaration')
-      if (decl) {
-        hasModification = decl.children.some(c => c.type === 'modification')
-      }
 
       for (let i = 0; i < node.children.length; i++) {
         const child = node.children[i]
@@ -680,13 +673,8 @@ export const printModelica: Printer<ASTNode>['print'] = (
           parts.push(' ', path.call(print, 'children', i))
         } else if (child.type === 'expression' || child.type === 'simple_expression') {
           // Conditional clause: "if <expression>"
-          // If declaration has modification, break line before 'if' for readability
-          // Otherwise keep it on same line
-          if (hasModification) {
-            parts.push(indent([line, 'if ', path.call(print, 'children', i)]))
-          } else {
-            parts.push(' if ', path.call(print, 'children', i))
-          }
+          // Always allow line break before 'if' - Prettier decides based on line length
+          parts.push(indent([line, 'if ', path.call(print, 'children', i)]))
         } else if (child.type === 'description_string') {
           // Break line before description string, indented
           parts.push(indent([line, path.call(print, 'children', i)]))
@@ -834,10 +822,10 @@ export const printModelica: Printer<ASTNode>['print'] = (
             for (let i = 0; i < argListNode.children.length; i++) {
               elementArgs.push(path.call(print, 'children', argListIndex, 'children', i))
             }
-            // Use line (not hardline) so content stays on same line if it fits
+            // Use softline (not line) so there's no space after '(' when content fits on one line
             return group([
               '(',
-              indent([line, join([',', line], elementArgs)]),
+              indent([softline, join([',', line], elementArgs)]),
               ')'])
           }
           

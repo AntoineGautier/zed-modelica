@@ -4,7 +4,7 @@ model Annotations
     constrainedby Modelica.Media.Interfaces.PartialMedium
     "Medium model for all four fluid circuits"
     annotation(choices(
-      choice( redeclare package Medium=Buildings.Media.Water "Water"),
+      choice(redeclare package Medium=Buildings.Media.Water "Water"),
       choice(
         redeclare replaceable package Medium=Buildings.Media.Antifreeze.PropyleneGlycolWater(
           property_T=293.15,
@@ -35,7 +35,8 @@ model Annotations
           "Separate dampers for ventilation and economizer, with differential pressure sensor")),
       Dialog(group="Configuration"),
       Placement(transformation(extent={{-58,-94},{-22,-66}})));
-  Buildings.Templates.Components.Interfaces.Bus bus if typ <> Buildings.Templates.Components.Types.Valve.None
+  Buildings.Templates.Components.Interfaces.Bus bus
+    if typ <> Buildings.Templates.Components.Types.Valve.None
     "Control bus"
     annotation(Placement(transformation(extent={{-20,-20},{20,20}},
       rotation=0,

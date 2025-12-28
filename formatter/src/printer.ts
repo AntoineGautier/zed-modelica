@@ -288,9 +288,17 @@ function isGraphicsArray(path: AstPath<ASTNode>): boolean {
 }
 
 /**
- * Check if this is a choices annotation (choices(...))
+ * Check if this class_modification's parent element_modification is 'choices'
+ * (i.e., this is the choices(...) level, not a nested choice(...))
  */
-
+function isChoicesLevel(path: AstPath<ASTNode>): boolean {
+  const parent = path.getParentNode()
+  if (parent?.type === 'element_modification') {
+    const nameChild = parent.children?.find(c => c.type === 'name')
+    if (nameChild?.text === 'choices') return true
+  }
+  return false
+}
 
 /**
  * Check if this is inside a choices annotation
@@ -797,7 +805,25 @@ export const printModelica: Printer<ASTNode>['print'] = (
           ]
         } else {
           // Nested annotations - check context for formatting
-          // Check if we're inside a choices annotation - each choice on its own line
+          // Check if this is the choices() level - each choice on its own line with hardline
+          if (isChoicesLevel(path)) {
+            const argListNode = node.children.find(c => c.type === 'argument_list')
+            if (!argListNode || argListNode.children.length === 0) {
+              return '()'
+            }
+            const argListIndex = node.children.findIndex(c => c.type === 'argument_list')
+            const elementArgs: Doc[] = []
+            for (let i = 0; i < argListNode.children.length; i++) {
+              elementArgs.push(path.call(print, 'children', argListIndex, 'children', i))
+            }
+            // All choices on new lines for readability
+            return group([
+              '(',
+              indent([hardline, join([',', hardline], elementArgs)]),
+              ')'])
+          }
+          
+          // Check if inside choices (e.g., choice() content) - use line so Prettier decides based on 80 chars
           if (isInsideChoicesAnnotation(path)) {
             const argListNode = node.children.find(c => c.type === 'argument_list')
             if (!argListNode || argListNode.children.length === 0) {
@@ -808,17 +834,11 @@ export const printModelica: Printer<ASTNode>['print'] = (
             for (let i = 0; i < argListNode.children.length; i++) {
               elementArgs.push(path.call(print, 'children', argListIndex, 'children', i))
             }
-            if (elementArgs.length === 1) {
-              return ['(', elementArgs[0], ')']
-            }
-            // First choice on same line, rest on new lines with indent
-            // Closing paren on same line as last element
-            return [
+            // Use line (not hardline) so content stays on same line if it fits
+            return group([
               '(',
-              elementArgs[0],
-              ',',
-              indent([hardline, join([',', hardline], elementArgs.slice(1)), ')']),
-            ]
+              indent([line, join([',', line], elementArgs)]),
+              ')'])
           }
           
           // For nested class_modifications in annotations (like Icon(...), Placement(...)),
@@ -1913,18 +1933,13 @@ export const printModelica: Printer<ASTNode>['print'] = (
         }
 
         // Check if this is choices() - each choice on new line
-        // First choice on same line as opening paren
         if (funcName === 'choices') {
           if (args.length === 0) return '()'
-          if (args.length === 1) return ['(', args[0], ')']
-          // First choice on same line, rest on new lines
-          // Closing paren on same line as last element
-          return [
+          // All choices on new lines for readability
+          return group([
             '(',
-            args[0],
-            ',',
-            indent([hardline, join([',', hardline], args.slice(1)), ')']),
-          ]
+            indent([hardline, join([',', hardline], args)]),
+            ')'])
         }
 
         // Check if this is a first-level annotation attribute (Icon, Diagram, Placement, etc.)

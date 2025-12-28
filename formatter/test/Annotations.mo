@@ -1,5 +1,14 @@
 within;
 model Annotations
+replaceable package Medium=Buildings.Media.Water
+  constrainedby Modelica.Media.Interfaces.PartialMedium
+  "Medium model for all four fluid circuits"
+  annotation (choices(
+    choice(redeclare package Medium=Buildings.Media.Water "Water"),
+    choice(redeclare replaceable package Medium =
+          Buildings.Media.Antifreeze.PropyleneGlycolWater (
+      property_T=293.15,X_a=0.40)
+      "Propylene glycol water, 40% mass fraction")));
   parameter Boolean is_dpBalYPumSetCal(start=false)=false
     "Set to true to automatically size balancing valves or evaluate pump speed providing design flow"
     annotation(Evaluate=true, Dialog(tab="Advanced",
@@ -17,7 +26,7 @@ model Annotations
         "Outdoor air section"
         annotation (
         choices(
-          choice(redeclare replaceable Buildings.Templates.AirHandlersFans.Components.OutdoorSection.SingleDamper secOut
+          choice(redeclare OutdoorSection.SingleDamper secOut
             "Single damper for ventilation and economizer, with airflow measurement station"),
           choice(redeclare replaceable Buildings.Templates.AirHandlersFans.Components.OutdoorSection.DedicatedDampersAirflow secOut
             "Separate dampers for ventilation and economizer, with airflow measurement station"),

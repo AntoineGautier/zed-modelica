@@ -5,7 +5,6 @@ schema_version = 1
 authors = ["Antoine Gautier <agautier@solamen.fr>"]
 description = "Highlighting for Modelica language"
 repository = "https://github.com/AntoineGautier/zed-modelica"
-languages = ["languages/modelica"]
 
 [grammars.modelica]
 repository = "https://github.com/AntoineGautier/tree-sitter-modelica"

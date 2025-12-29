@@ -2,6 +2,8 @@ name = "Modelica"
 grammar = "modelica"
 path_suffixes = ["mo"]
 line_comments = ["// "]
+collapsed_placeholder = " /* ... */ "
+block_comment = { start = "/*", prefix="", end = "*/", tab_size = 2 }
 tab_size = 2
 brackets = [
     { start = "[", end = "]", close = true, newline = false },

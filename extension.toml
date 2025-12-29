@@ -7,5 +7,5 @@ description = "Highlighting for Modelica language"
 repository = "https://github.com/AntoineGautier/zed-modelica"
 
 [grammars.modelica]
-repository = "https://github.com/AntoineGautier/tree-sitter-modelica"
-commit = "823792840892240fd9cc5e8f25c58bc5db371ecc"
+repository = "file:///Users/reituag/gitrepo/zed-modelica/grammars/tree-sitter-modelica"
+rev = "823792840892240fd9cc5e8f25c58bc5db371ecc"

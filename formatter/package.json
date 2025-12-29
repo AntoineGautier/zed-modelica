@@ -19,6 +19,7 @@
     "README.md"
   ],
   "scripts": {
+    "setup": "cd ../grammars/tree-sitter-modelica && npm i && npm run build",
     "build": "tsc",
     "dev": "tsc --watch",
     "clean": "rm -rf dist",
@@ -41,7 +42,7 @@
   },
   "dependencies": {
     "tree-sitter": "^0.25.0",
-    "tree-sitter-modelica": "file:../grammars/modelica"
+    "tree-sitter-modelica": "file:../grammars/tree-sitter-modelica"
   },
   "devDependencies": {
     "@types/node": "^20.10.0",

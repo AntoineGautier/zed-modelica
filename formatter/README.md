@@ -2,24 +2,12 @@
 
 A [Prettier](https://prettier.io/) plugin for formatting Modelica code using [tree-sitter](https://tree-sitter.github.io/tree-sitter/).
 
-## Prerequisites
-
-- Node.js 20+
-- The `tree-sitter-modelica` grammar must be available at `../grammars/modelica`
-
 ## Installation
 
 ```bash
-cd ./grammars/modelica
-npm install
-```
-
-If the above fails at build stage, try `npm install --ignore-scripts && npx node-gyp-build` instead.
-
-```bash
 cd ./formatter
-npm install
-npm run build
+npm run setup
+npm install && npm run build
 ```
 
 ## CLI Usage

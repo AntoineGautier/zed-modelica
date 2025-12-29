@@ -16,11 +16,6 @@ Then rebuild (or reinstall) with Zed. This will create/update `grammars/modelica
 
 ## Notes Regarding Zed Integration
 
-The dependency `grammars/modelica` is not managed by git submodule because Zed requires this to be a clone of the repository specified in `extension.toml`.
-Zed will clone it automatically at extension install/rebuild.
-
-### brackets.scm Issue
-
 Including the file `languages/modelica/brackets.scm` breaks syntax highlighting.
 
 **Root cause (?)**: The WASM-compiled tree-sitter parser outputs **only named nodes**, while native Node bindings output **both named and unnamed nodes**.

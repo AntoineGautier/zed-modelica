@@ -644,6 +644,14 @@ export const printModelica: Printer<ASTNode>["print"] = (
         (c) => c.type === "annotation_clause",
       );
 
+      // Check if class_definition contains a short_class_specifier (needs semicolon)
+      // vs long_class_specifier (already ends with "end ClassName;")
+      const hasShortClassDefinition = node.children.some(
+        (c) =>
+          c.type === "class_definition" &&
+          c.children.some((cc: any) => cc.type === "short_class_specifier"),
+      );
+
       for (let i = 0; i < node.children.length; i++) {
         const child = node.children[i];
         if (child.type === "component_clause") {
@@ -670,16 +678,24 @@ export const printModelica: Printer<ASTNode>["print"] = (
         }
       }
 
-      // Add semicolon at the end if we have constraining_clause, description_string, or annotation_clause
+      // Add semicolon at the end for:
+      // 1. component_clause with constraining/description/annotation clauses
+      // 2. short_class_definition (e.g., "package X = Y" or "replaceable package X = Y")
       if (
         hasConstrainingClause ||
         hasDescriptionString ||
         hasAnnotationClause
       ) {
-        // Only add semicolon if we had a component_clause (not a class_definition)
-        if (node.children.some((c) => c.type === "component_clause")) {
+        // Add semicolon if we have component_clause or short_class_definition
+        if (
+          node.children.some((c) => c.type === "component_clause") ||
+          hasShortClassDefinition
+        ) {
           parts.push(";");
         }
+      } else if (hasShortClassDefinition) {
+        // Short class definition without additional clauses still needs semicolon
+        parts.push(";");
       }
       return group(parts);
     }

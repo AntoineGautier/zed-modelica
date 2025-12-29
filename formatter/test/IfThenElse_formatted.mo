@@ -10,6 +10,13 @@ block IfThenElse
         else dat.dpValCheChiWat_nominal)
     else 0
     "Primary (CHW or common HW and CHW) pump check valve pressure drop at design CHW flow rate";
+  final parameter Modelica.Units.SI.Temperature TChiWatRet_nominal =
+    if is_rev
+    then TChiWatSup_nominal - QCoo_flow_nominal / cpChiWat_default /
+    mChiWat_flow_nominal
+    else Buildings.Templates.Data.Defaults.TChiWatRet
+    "CHW return temperature - Each heat pump"
+    annotation(Dialog(group="Nominal condition"));
   final parameter Modelica.Units.SI.PressureDifference dpBalHeaWatHp_nominal =
     if is_dpBalYPumSetCal and
       typPumHeaWatPri == Buildings.Templates.Plants.HeatPumps.Types.PumpsPrimary.Constant
@@ -19,6 +26,8 @@ block IfThenElse
         ((if have_valHpInlIso then 1 else 0) +
           (if have_valHpOutIso then 1 else 0)) + dpValCheHeaWat_nominal,
       datPum=dat.pumHeaWatPriSin[1])
+    elseif not is_dpBalYPumSetCal or is_dpBalYPumSetCal
+    then Buildings.Templates.Utilities.computeBalancingPressureDrop(m_flow_nominal=hp.mHeaWatHp_flow_nominal)
     else dat.dpBalHeaWatHp_nominal
     "HP HW balancing valve pressure drop at design HW flow";
   final parameter Modelica.Units.SI.PressureDifference dpBalChiWatHp_nominal =
@@ -34,6 +43,7 @@ block IfThenElse
       datPum=if cfg.typPumChiWatPri == Buildings.Templates.Plants.HeatPumps.Types.PumpsPrimary.Constant
         then dat.pumChiWatPriSin[1]
         else dat.pumHeaWatPriSin[1])
+    elseif not is_dpBalYPumSetCal or is_dpBalYPumSetCal then 1
     else dat.dpBalChiWatHp_nominal
     "HP CHW balancing valve pressure drop at design CHW flow";
   Buildings.Templates.Components.Routing.Junction junChiWatBypRet(
@@ -60,6 +70,27 @@ block IfThenElse
     annotation(Placement(transformation(extent={{10,10},{-10,-10}},
       rotation=0,
       origin={180,0})));
+initial equation
+  if is_dpBalYPumSetCal and have_chiWat and
+  typDis == Buildings.Templates.Plants.HeatPumps.Types.Distribution.Constant1Variable2 and
+  (typPumChiWatPri == Buildings.Templates.Plants.HeatPumps.Types.PumpsPrimary.Variable or
+    typPumChiWatPri == Buildings.Templates.Plants.HeatPumps.Types.PumpsPrimary.None and
+    typPumHeaWatPri == Buildings.Templates.Plants.HeatPumps.Types.PumpsPrimary.Variable) then
+    0 = Buildings.Templates.Utilities.computeBalancingPressureDrop(
+      m_flow_nominal=hp.mChiWatHp_flow_nominal,
+      dp_nominal=max(valIso.dpChiWat_nominal) + dpValCheChiWat_nominal,
+      datPum=if typPumChiWatPri == Buildings.Templates.Plants.HeatPumps.Types.PumpsPrimary.Variable
+        then dat.pumChiWatPriSin[1]
+        else dat.pumHeaWatPriSin[1],
+      r_N=yPumChiWatPriSet);
+    assert(
+      yPumChiWatPriSet >= 0.1 and yPumChiWatPriSet <= 2,
+      "In " + getInstanceName() + ": " +
+      "The calculated primary pump speed to provide the design CHW flow is out of bounds, " +
+      "indicating that the primary pump curve needs to be revised.");
+  else
+    yPumChiWatPriSet = dat.ctl.yPumChiWatPriSet;
+  end if;
 equation
   when {
     u, reset, reset, reset, reset, reset, reset, reset, reset, reset, reset, reset

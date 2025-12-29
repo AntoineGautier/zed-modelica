@@ -745,8 +745,9 @@ model AirToWater
 initial equation
   // Calculation of pump speed providing design flow.
   if is_dpBalYPumSetCal and have_heaWat and
-  typDis == Buildings.Templates.Plants.HeatPumps.Types.Distribution.Constant1Variable2 and
-  typPumHeaWatPri == Buildings.Templates.Plants.HeatPumps.Types.PumpsPrimary.Variable then
+    typDis == Buildings.Templates.Plants.HeatPumps.Types.Distribution.Constant1Variable2 and
+    typPumHeaWatPri == Buildings.Templates.Plants.HeatPumps.Types.PumpsPrimary.Variable
+  then
     0 = Buildings.Templates.Utilities.computeBalancingPressureDrop(
       m_flow_nominal=hp.mHeaWatHp_flow_nominal,
       dp_nominal=max(valIso.dpHeaWat_nominal) + dpValCheHeaWat_nominal,
@@ -761,10 +762,11 @@ initial equation
     yPumHeaWatPriSet = dat.ctl.yPumHeaWatPriSet;
   end if;
   if is_dpBalYPumSetCal and have_chiWat and
-  typDis == Buildings.Templates.Plants.HeatPumps.Types.Distribution.Constant1Variable2 and
-  (typPumChiWatPri == Buildings.Templates.Plants.HeatPumps.Types.PumpsPrimary.Variable or
-    typPumChiWatPri == Buildings.Templates.Plants.HeatPumps.Types.PumpsPrimary.None and
-    typPumHeaWatPri == Buildings.Templates.Plants.HeatPumps.Types.PumpsPrimary.Variable) then
+    typDis == Buildings.Templates.Plants.HeatPumps.Types.Distribution.Constant1Variable2 and
+    (typPumChiWatPri == Buildings.Templates.Plants.HeatPumps.Types.PumpsPrimary.Variable or
+      typPumChiWatPri == Buildings.Templates.Plants.HeatPumps.Types.PumpsPrimary.None and
+      typPumHeaWatPri == Buildings.Templates.Plants.HeatPumps.Types.PumpsPrimary.Variable)
+  then
     0 = Buildings.Templates.Utilities.computeBalancingPressureDrop(
       m_flow_nominal=hp.mChiWatHp_flow_nominal,
       dp_nominal=max(valIso.dpChiWat_nominal) + dpValCheChiWat_nominal,
@@ -781,7 +783,8 @@ initial equation
     yPumChiWatPriSet = dat.ctl.yPumChiWatPriSet;
   end if;
   if is_dpBalYPumSetCal and have_heaWat and
-  typPumHeaWatPri == Buildings.Templates.Plants.HeatPumps.Types.PumpsPrimary.Constant then
+    typPumHeaWatPri == Buildings.Templates.Plants.HeatPumps.Types.PumpsPrimary.Constant
+  then
     assert(
       dpBalHeaWatHp_nominal >= 0,
       "In " + getInstanceName() + ": " +
@@ -789,7 +792,8 @@ initial equation
       "indicating that the primary pump curve needs to be revised.");
   end if;
   if is_dpBalYPumSetCal and have_chiWat and
-  typPumHeaWatPri == Buildings.Templates.Plants.HeatPumps.Types.PumpsPrimary.Constant then
+    typPumHeaWatPri == Buildings.Templates.Plants.HeatPumps.Types.PumpsPrimary.Constant
+  then
     assert(
       dpBalChiWatHp_nominal >= 0,
       "In " + getInstanceName() + ": " +

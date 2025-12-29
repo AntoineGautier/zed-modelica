@@ -55,6 +55,12 @@ function isInContinuationContext(path: AstPath<ASTNode>): boolean {
       return true;
     }
 
+    // If we're inside a named_argument, we're in continuation context
+    // The named_argument already adds indent for its value
+    if (ancestor.type === "named_argument") {
+      return true;
+    }
+
     // Stop at these boundaries - they reset the continuation context
     if (ancestor.type === "declaration") break;
     if (ancestor.type === "component_declaration") break;
@@ -1249,13 +1255,25 @@ export const printModelica: Printer<ASTNode>["print"] = (
 
     case "if_equation":
     case "if_statement": {
-      const parts: Doc[] = ["if "];
+      const parts: Doc[] = [];
       let statementListCount = 0;
 
       for (let i = 0; i < node.children.length; i++) {
         const child = node.children[i];
         if (child.type === "expression") {
-          parts.push(path.call(print, "children", i), " then");
+          // Condition expression with proper indentation for continuations
+          // and line breaking before "then" if needed
+          const condExpr = path.call(print, "children", i);
+          // Structure: "if " + condition on same line, continuations indented,
+          // "then" either on same line (if fits) or new line (at if's level)
+          parts.push(
+            group([
+              "if ",
+              indent(condExpr),
+              line,
+              "then",
+            ]),
+          );
         } else if (
           child.type === "equation_list" ||
           child.type === "statement_list"
@@ -1290,12 +1308,21 @@ export const printModelica: Printer<ASTNode>["print"] = (
 
     case "else_if_equation_clause":
     case "else_if_statement_clause": {
-      const parts: Doc[] = ["elseif "];
+      const parts: Doc[] = [];
 
       for (let i = 0; i < node.children.length; i++) {
         const child = node.children[i];
         if (child.type === "expression") {
-          parts.push(path.call(print, "children", i), " then");
+          // Same pattern as if_statement for condition + then
+          const condExpr = path.call(print, "children", i);
+          parts.push(
+            group([
+              "elseif ",
+              indent(condExpr),
+              line,
+              "then",
+            ]),
+          );
         } else if (
           child.type === "equation_list" ||
           child.type === "statement_list"
@@ -1499,51 +1526,19 @@ export const printModelica: Printer<ASTNode>["print"] = (
         childIdx++;
       }
 
-      // Check if then expression starts with something complex that needs its own line
-      // Only nested if-expressions need special handling - let binary expressions handle their own breaks
-      // Handle cases like "(\nif..." where paren is followed by newline
-      const thenExprText = (children[1]?.text ?? "")
-        .replace(/^\s+/, "")
-        .replace(/^\(\s*/, "(");
-      const thenStartsWithComplexExpr =
-        thenExprText.startsWith("(if") || thenExprText.startsWith("if");
+      // Build then clause: "then " followed by then-value
+      // The then-value handles its own breaking (e.g., function args break)
+      const thenClause: Doc = ["then ", thenExprDoc];
 
-      // Build then clause:
-      // - Always keep "then" with condition using line (becomes space if fits)
-      // - Complex expressions (nested if): indent the value on next line
-      // - Simple expressions: keep "then VALUE" together
-      const thenClause: Doc = thenStartsWithComplexExpr
-        ? ["then", indent([line, thenExprDoc])]
-        : ["then ", thenExprDoc];
-
-      // For condition+then grouping, we want "if COND then" to stay together
-      // even when then-value is complex. Use a separate group for condition+then keyword.
-      const conditionThenKeyword: Doc = group([
-        "if ",
-        ...conditionParts,
-        " then",
-      ]);
-
-      // Build else clause similarly
+      // Build else clause
       const elseClause: Doc = ["else ", elseExprDoc];
 
-      // Centralized formatting:
-      // Key insight: use line (not softline) between condition and then when condition is long
-      // This ensures "if COND then" stays together for short conditions
+      // Single formatting pattern for all cases:
+      // group([keyword, condition, line, thenClause]) - the inner group decides
+      // if "if COND then VALUE" fits. If not, line becomes newline before "then".
+      // The then-value's internal structure (e.g., function call) handles its own breaks.
 
       if (inContinuation) {
-        // Already indented by parent - keep keywords aligned, no extra indent
-        // Use inner group for condition+then keyword so they stay together when they fit
-        // Then-value goes on next line if complex
-        if (thenStartsWithComplexExpr) {
-          return group([
-            conditionThenKeyword,
-            indent([line, thenExprDoc]),
-            ...elseIfParts,
-            line,
-            elseClause,
-          ]);
-        }
         return group([
           group(["if ", ...conditionParts, line, thenClause]),
           ...elseIfParts,
@@ -1553,15 +1548,6 @@ export const printModelica: Printer<ASTNode>["print"] = (
       }
 
       if (midLine) {
-        // Mid-line if (e.g., `name=if ...`) - indent continuation from the if keyword
-        // Use inner group for condition+then keyword so they stay together when they fit
-        // When inner group breaks, indent the then clause
-        if (thenStartsWithComplexExpr) {
-          return group([
-            conditionThenKeyword,
-            indent([line, thenExprDoc, ...elseIfParts, line, elseClause]),
-          ]);
-        }
         return group([
           "if ",
           ...conditionParts,
@@ -1569,17 +1555,7 @@ export const printModelica: Printer<ASTNode>["print"] = (
         ]);
       }
 
-      // Top-level RHS - keywords (if, then, else) align at same level
-      // Use inner group for condition+then keyword so they stay together when they fit
-      if (thenStartsWithComplexExpr) {
-        return group([
-          conditionThenKeyword,
-          indent([line, thenExprDoc]),
-          ...elseIfParts,
-          line,
-          elseClause,
-        ]);
-      }
+      // Top-level RHS
       return group([
         group(["if ", ...conditionParts, line, thenClause]),
         ...elseIfParts,
@@ -1602,9 +1578,14 @@ export const printModelica: Printer<ASTNode>["print"] = (
         }
       }
 
-      // Use line between condition and then - Prettier will keep together if fits
-      // or break if line exceeds width
-      return group(["elseif ", ...conditionParts, line, "then ", thenExprDoc]);
+      // EXACT same pattern as if_expression inner group:
+      // group([keyword, condition, line, thenClause])
+      // This group decides if "elseif COND then VALUE" fits.
+      // If not, line becomes newline before "then".
+      // Note: this gets composed into the parent if_expression with `line` before it,
+      // just like the if's inner group has elseIfParts after it.
+      const thenClause: Doc = ["then ", thenExprDoc];
+      return group(["elseif ", ...conditionParts, line, thenClause]);
     }
 
     case "simple_expression":
@@ -1813,23 +1794,26 @@ export const printModelica: Printer<ASTNode>["print"] = (
             return operands[0];
           }
 
-          // Build flat structure: first operand, then sibling groups for each subsequent
+          // Build flat structure: first operand, then all continuation operands
           // All continuations in the same flattened chain share the same indent level.
-          const parts: Doc[] = [operands[0]];
+          // We wrap ALL continuation parts in a shared indent block (when not already
+          // in continuation context) so that breaking any line in the chain results
+          // in consistent indentation for all continuation lines.
+          const inContinuation = isInContinuationContext(path);
 
+          // Build the continuation parts (everything after first operand)
+          const continuationParts: Doc[] = [];
           for (let i = 0; i < ops.length; i++) {
-            // Use centralized handler for first operand, simple line for rest
-            // This ensures only +1 indent level for the entire chain
-            parts.push(
-              " ",
-              ops[i],
-              i === 0
-                ? wrapContinuation(operands[i + 1], path)
-                : group([line, operands[i + 1]]),
-            );
+            continuationParts.push(" ", ops[i], group([line, operands[i + 1]]));
           }
 
-          return parts;
+          if (inContinuation) {
+            // Already in continuation context - no additional indent needed
+            return group([operands[0], ...continuationParts]);
+          } else {
+            // Wrap all continuations in shared indent so all lines get same indent
+            return group([operands[0], indent(continuationParts)]);
+          }
         }
 
         // Short expressions and comparisons: stay inline
@@ -1890,7 +1874,8 @@ export const printModelica: Printer<ASTNode>["print"] = (
     case "parenthesized_expression": {
       // Wrap in parens with indent for multi-line content
       // Content starts on same line as '(', breaks with indent if needed
-      // The isInContinuationContext check prevents nested constructs from adding more indent
+      // The content inside parentheses should always be indented relative to
+      // the opening paren when it breaks to multiple lines
       const content = path.map(print, "children");
       return group(["(", indent(content), ")"]);
     }
@@ -2196,8 +2181,12 @@ export const printModelica: Printer<ASTNode>["print"] = (
         firstChild.children.length === 1;
 
       if (isSingleArg) {
-        // Simple single-argument call - keep on one line
-        return group(["(", args[0], ")"]);
+        // Single-argument call - allow breaking if line exceeds limit
+        // Use softline after "(" so arg can go on new line if needed
+        if (isInNamedArgument) {
+          return group(["(", softline, args[0], ")"]);
+        }
+        return group(["(", indent([softline, args[0]]), ")"]);
       }
 
       // First arg on same line, rest indented, closing paren on same line as last element

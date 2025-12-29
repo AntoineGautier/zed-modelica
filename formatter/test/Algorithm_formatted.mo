@@ -55,17 +55,17 @@ initial equation
       assert(
         abs(table[i, j] - integer(table[i, j])) < Constants.small,
         "In " + getInstanceName() + ": Table value table[" + String(i) + ", " +
-        String(j) + "] = " + String(table[i, j]) + " is not an Integer.");
+          String(j) + "] = " + String(table[i, j]) + " is not an Integer.");
     end for;
   end for;
   assert(
     abs(table[1, 1]) < Constants.small,
     "In " + getInstanceName() +
-    ": First time stamp must be zero as otherwise no data is defined for the start of the table.");
+      ": First time stamp must be zero as otherwise no data is defined for the start of the table.");
   assert(
     period - table[1, end] > Constants.small,
     "In " + getInstanceName() +
-    ": Last time stamp in table must be smaller than period.");
+      ": Last time stamp in table must be smaller than period.");
   idx = getIndex(time, period, timeStamps);
   y[:] = val[idx, :];
 equation

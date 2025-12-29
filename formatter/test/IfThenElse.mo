@@ -84,7 +84,8 @@ initial equation
           "In " + getInstanceName() + ": " +
           "The calculated primary pump speed to provide the design CHW flow is out of bounds, " +
           "indicating that the primary pump curve needs to be revised.");
-      else
+      elseif not is_dpBalYPumSetCal or is_dpBalYPumSetCal then yPumChiWatPriSet=1;
+        else
         yPumChiWatPriSet = dat.ctl.yPumChiWatPriSet;
       end if;
 equation

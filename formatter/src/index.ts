@@ -42,7 +42,7 @@ const parsers: Record<string, Parser> = {
   },
 };
 
-// Printer definition
+// Printer definition with post-processing
 const printers: Record<string, Printer<ASTNode>> = {
   "modelica-ast": {
     print: printModelica,
@@ -58,6 +58,8 @@ const options: Record<string, SupportOption> = {
     description: "Number of spaces per indentation level for Modelica code.",
   },
 };
+
+
 
 // Export the plugin
 const plugin: Plugin<ASTNode> = {

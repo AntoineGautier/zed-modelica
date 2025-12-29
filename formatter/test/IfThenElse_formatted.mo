@@ -3,17 +3,17 @@ block IfThenElse
   final parameter Real x =
     if true then 1 elseif false then 0 else 000000000000000000;
   final parameter Modelica.Units.SI.PressureDifference dpValCheChiWat_nominal =
-    if have_chiWat then
-      (if typPumChiWatPri == Buildings.Templates.Plants.HeatPumps.Types.PumpsPrimary.None
-        then dat.dpValCheHeaWat_nominal *
-          (hp.mChiWatHp_flow_nominal / max(dat.pumHeaWatPri.m_flow_nominal)) ^ 2
-        else dat.dpValCheChiWat_nominal)
+    if have_chiWat
+    then (if typPumChiWatPri == Buildings.Templates.Plants.HeatPumps.Types.PumpsPrimary.None
+      then dat.dpValCheHeaWat_nominal *
+        (hp.mChiWatHp_flow_nominal / max(dat.pumHeaWatPri.m_flow_nominal)) ^ 2
+      else dat.dpValCheChiWat_nominal)
     else 0
     "Primary (CHW or common HW and CHW) pump check valve pressure drop at design CHW flow rate";
   final parameter Modelica.Units.SI.Temperature TChiWatRet_nominal =
     if is_rev
     then TChiWatSup_nominal - QCoo_flow_nominal / cpChiWat_default /
-    mChiWat_flow_nominal
+      mChiWat_flow_nominal
     else Buildings.Templates.Data.Defaults.TChiWatRet
     "CHW return temperature - Each heat pump"
     annotation(Dialog(group="Nominal condition"));
@@ -27,7 +27,8 @@ block IfThenElse
           (if have_valHpOutIso then 1 else 0)) + dpValCheHeaWat_nominal,
       datPum=dat.pumHeaWatPriSin[1])
     elseif not is_dpBalYPumSetCal or is_dpBalYPumSetCal
-    then Buildings.Templates.Utilities.computeBalancingPressureDrop(m_flow_nominal=hp.mHeaWatHp_flow_nominal)
+    then Buildings.Templates.Utilities.computeBalancingPressureDrop(
+      m_flow_nominal=hp.mHeaWatHp_flow_nominal)
     else dat.dpBalHeaWatHp_nominal
     "HP HW balancing valve pressure drop at design HW flow";
   final parameter Modelica.Units.SI.PressureDifference dpBalChiWatHp_nominal =
@@ -72,10 +73,11 @@ block IfThenElse
       origin={180,0})));
 initial equation
   if is_dpBalYPumSetCal and have_chiWat and
-  typDis == Buildings.Templates.Plants.HeatPumps.Types.Distribution.Constant1Variable2 and
-  (typPumChiWatPri == Buildings.Templates.Plants.HeatPumps.Types.PumpsPrimary.Variable or
-    typPumChiWatPri == Buildings.Templates.Plants.HeatPumps.Types.PumpsPrimary.None and
-    typPumHeaWatPri == Buildings.Templates.Plants.HeatPumps.Types.PumpsPrimary.Variable) then
+    typDis == Buildings.Templates.Plants.HeatPumps.Types.Distribution.Constant1Variable2 and
+    (typPumChiWatPri == Buildings.Templates.Plants.HeatPumps.Types.PumpsPrimary.Variable or
+      typPumChiWatPri == Buildings.Templates.Plants.HeatPumps.Types.PumpsPrimary.None and
+      typPumHeaWatPri == Buildings.Templates.Plants.HeatPumps.Types.PumpsPrimary.Variable)
+  then
     0 = Buildings.Templates.Utilities.computeBalancingPressureDrop(
       m_flow_nominal=hp.mChiWatHp_flow_nominal,
       dp_nominal=max(valIso.dpChiWat_nominal) + dpValCheChiWat_nominal,
@@ -86,8 +88,10 @@ initial equation
     assert(
       yPumChiWatPriSet >= 0.1 and yPumChiWatPriSet <= 2,
       "In " + getInstanceName() + ": " +
-      "The calculated primary pump speed to provide the design CHW flow is out of bounds, " +
-      "indicating that the primary pump curve needs to be revised.");
+        "The calculated primary pump speed to provide the design CHW flow is out of bounds, " +
+        "indicating that the primary pump curve needs to be revised.");
+  elseif not is_dpBalYPumSetCal or is_dpBalYPumSetCal then
+    yPumChiWatPriSet = 1;
   else
     yPumChiWatPriSet = dat.ctl.yPumChiWatPriSet;
   end if;
@@ -124,29 +128,30 @@ equation
       m_flow_turbulent=m_flow_turbulent);
     // max function ensures that m_flow_y2 does not decrease further for dp_x < dp_x2
     m_flow_y2 = m_flow_set + coeff1 * max(dp_x, dp_x2);
-    m_flow_smooth = noEvent(smooth(
-      2,
-      if dp_x <= dp_x1 then m_flow_y1
-      elseif dp_x >= dp_x2 then m_flow_y2
-      else Buildings.Utilities.Math.Functions.quinticHermite(
-        x=dp_x,
-        x1=dp_x1,
-        x2=dp_x2,
-        y1=m_flow_y1,
-        y2=m_flow_y2,
-        y1d=Buildings.Fluid.BaseClasses.FlowModels.basicFlowFunction_dp_der(
-          dp=dp_min + dp_x1,
-          k=kTotMax,
-          m_flow_turbulent=m_flow_turbulent,
-          dp_der=1),
-        y2d=coeff1,
-        y1dd=Buildings.Fluid.BaseClasses.FlowModels.basicFlowFunction_dp_der2(
-          dp=dp_min + dp_x1,
-          k=kTotMax,
-          m_flow_turbulent=m_flow_turbulent,
-          dp_der=1,
-          dp_der2=0),
-        y2dd=y2dd)));
+    m_flow_smooth = noEvent(
+      smooth(
+        2,
+        if dp_x <= dp_x1 then m_flow_y1
+        elseif dp_x >= dp_x2 then m_flow_y2
+        else Buildings.Utilities.Math.Functions.quinticHermite(
+          x=dp_x,
+          x1=dp_x1,
+          x2=dp_x2,
+          y1=m_flow_y1,
+          y2=m_flow_y2,
+          y1d=Buildings.Fluid.BaseClasses.FlowModels.basicFlowFunction_dp_der(
+            dp=dp_min + dp_x1,
+            k=kTotMax,
+            m_flow_turbulent=m_flow_turbulent,
+            dp_der=1),
+          y2d=coeff1,
+          y1dd=Buildings.Fluid.BaseClasses.FlowModels.basicFlowFunction_dp_der2(
+            dp=dp_min + dp_x1,
+            k=kTotMax,
+            m_flow_turbulent=m_flow_turbulent,
+            dp_der=1,
+            dp_der2=0),
+          y2dd=y2dd)));
   else
     m_flow_x = m_flow - m_flow_set;
     m_flow_x1 = -m_flow_x2;
@@ -158,29 +163,30 @@ equation
       m_flow_turbulent=m_flow_turbulent);
     // max function ensures that dp_y2 does not decrease further for m_flow_x < m_flow_x2
     dp_y2 = dp_min + coeff2 * max(m_flow_x, m_flow_x2);
-    dp_smooth = noEvent(smooth(
-      2,
-      if m_flow_x <= m_flow_x1 then dp_y1
-      elseif m_flow_x >= m_flow_x2 then dp_y2
-      else Buildings.Utilities.Math.Functions.quinticHermite(
-        x=m_flow_x,
-        x1=m_flow_x1,
-        x2=m_flow_x2,
-        y1=dp_y1,
-        y2=dp_y2,
-        y1d=Buildings.Fluid.BaseClasses.FlowModels.basicFlowFunction_m_flow_der(
-          m_flow=m_flow_set + m_flow_x1,
-          k=kTotMax,
-          m_flow_turbulent=m_flow_turbulent,
-          m_flow_der=1),
-        y2d=coeff2,
-        y1dd=Buildings.Fluid.BaseClasses.FlowModels.basicFlowFunction_m_flow_der2(
-          m_flow=m_flow_set + m_flow_x1,
-          k=kTotMax,
-          m_flow_turbulent=m_flow_turbulent,
-          m_flow_der=1,
-          m_flow_der2=0),
-        y2dd=y2dd)));
+    dp_smooth = noEvent(
+      smooth(
+        2,
+        if m_flow_x <= m_flow_x1 then dp_y1
+        elseif m_flow_x >= m_flow_x2 then dp_y2
+        else Buildings.Utilities.Math.Functions.quinticHermite(
+          x=m_flow_x,
+          x1=m_flow_x1,
+          x2=m_flow_x2,
+          y1=dp_y1,
+          y2=dp_y2,
+          y1d=Buildings.Fluid.BaseClasses.FlowModels.basicFlowFunction_m_flow_der(
+            m_flow=m_flow_set + m_flow_x1,
+            k=kTotMax,
+            m_flow_turbulent=m_flow_turbulent,
+            m_flow_der=1),
+          y2d=coeff2,
+          y1dd=Buildings.Fluid.BaseClasses.FlowModels.basicFlowFunction_m_flow_der2(
+            m_flow=m_flow_set + m_flow_x1,
+            k=kTotMax,
+            m_flow_turbulent=m_flow_turbulent,
+            m_flow_der=1,
+            m_flow_der2=0),
+          y2dd=y2dd)));
   end if;
   kDamSquInv = if dpFixed_nominal > Modelica.Constants.eps
     then kSquInv - 1 / kFixed ^ 2

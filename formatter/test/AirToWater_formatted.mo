@@ -21,11 +21,11 @@ model AirToWater
       (hp.mHeaWatHp_flow_nominal / max(dat.pumHeaWatPri.m_flow_nominal)) ^ 2
     "Primary HW pump check valve pressure drop at design HW flow rate";
   final parameter Modelica.Units.SI.PressureDifference dpValCheChiWat_nominal =
-    if have_chiWat then
-      (if typPumChiWatPri == Buildings.Templates.Plants.HeatPumps.Types.PumpsPrimary.None
-        then dat.dpValCheHeaWat_nominal *
-          (hp.mChiWatHp_flow_nominal / max(dat.pumHeaWatPri.m_flow_nominal)) ^ 2
-        else dat.dpValCheChiWat_nominal)
+    if have_chiWat
+    then (if typPumChiWatPri == Buildings.Templates.Plants.HeatPumps.Types.PumpsPrimary.None
+      then dat.dpValCheHeaWat_nominal *
+        (hp.mChiWatHp_flow_nominal / max(dat.pumHeaWatPri.m_flow_nominal)) ^ 2
+      else dat.dpValCheChiWat_nominal)
     else 0
     "Primary (CHW or common HW and CHW) pump check valve pressure drop at design CHW flow rate";
   final parameter Modelica.Units.SI.PressureDifference dpBalHeaWatHp_nominal =
@@ -756,8 +756,8 @@ initial equation
     assert(
       yPumHeaWatPriSet >= 0.1 and yPumHeaWatPriSet <= 2,
       "In " + getInstanceName() + ": " +
-      "The calculated primary pump speed to provide the design HW flow is out of bounds, " +
-      "indicating that the primary pump curve needs to be revised.");
+        "The calculated primary pump speed to provide the design HW flow is out of bounds, " +
+        "indicating that the primary pump curve needs to be revised.");
   else
     yPumHeaWatPriSet = dat.ctl.yPumHeaWatPriSet;
   end if;
@@ -777,8 +777,8 @@ initial equation
     assert(
       yPumChiWatPriSet >= 0.1 and yPumChiWatPriSet <= 2,
       "In " + getInstanceName() + ": " +
-      "The calculated primary pump speed to provide the design CHW flow is out of bounds, " +
-      "indicating that the primary pump curve needs to be revised.");
+        "The calculated primary pump speed to provide the design CHW flow is out of bounds, " +
+        "indicating that the primary pump curve needs to be revised.");
   else
     yPumChiWatPriSet = dat.ctl.yPumChiWatPriSet;
   end if;
@@ -788,8 +788,8 @@ initial equation
     assert(
       dpBalHeaWatHp_nominal >= 0,
       "In " + getInstanceName() + ": " +
-      "The calculated pressure drop for the HW balancing valve is negative, " +
-      "indicating that the primary pump curve needs to be revised.");
+        "The calculated pressure drop for the HW balancing valve is negative, " +
+        "indicating that the primary pump curve needs to be revised.");
   end if;
   if is_dpBalYPumSetCal and have_chiWat and
     typPumHeaWatPri == Buildings.Templates.Plants.HeatPumps.Types.PumpsPrimary.Constant
@@ -797,8 +797,8 @@ initial equation
     assert(
       dpBalChiWatHp_nominal >= 0,
       "In " + getInstanceName() + ": " +
-      "The calculated pressure drop for the CHW balancing valve is negative, " +
-      "indicating that the primary pump curve needs to be revised.");
+        "The calculated pressure drop for the CHW balancing valve is negative, " +
+        "indicating that the primary pump curve needs to be revised.");
   end if;
 equation
   /* Control point connection - start */

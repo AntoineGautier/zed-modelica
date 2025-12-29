@@ -8,7 +8,7 @@ model Annotations
       choice(
         redeclare replaceable package Medium=Buildings.Media.Antifreeze.PropyleneGlycolWater(
           property_T=293.15,
-          X_a=0.40) "Propylene glycol water, 40% mass fraction")))
+          X_a=0.40) "Propylene glycol water, 40% mass fraction")));
   parameter Boolean is_dpBalYPumSetCal(start=false) = false
     "Set to true to automatically size balancing valves or evaluate pump speed providing design flow"
     annotation(Evaluate=true,

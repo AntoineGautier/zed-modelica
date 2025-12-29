@@ -1,4 +1,4 @@
-# Zed Modelica Language Extension
+# Zed Modelica Extension
 
 To update:
 

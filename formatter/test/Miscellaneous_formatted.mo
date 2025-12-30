@@ -1,0 +1,17 @@
+within ;
+model Miscellaneous
+  final model RefrigerantCycleChillerCooling =
+    Buildings.Fluid.Chillers.ModularReversible.RefrigerantCycle.TableData2DLoadDep(
+      final useInChi=true,
+      redeclare final Buildings.Fluid.HeatPumps.ModularReversible.RefrigerantCycle.Frosting.NoFrosting iceFacCal,
+      redeclare model RefrigerantCycleInertia=
+        Buildings.Fluid.HeatPumps.ModularReversible.RefrigerantCycle.Inertias.VariableOrder(
+          refIneFreConst=1 / 300,
+          nthOrd=1,
+          initType=Modelica.Blocks.Types.Init.InitialState),
+      final dat=datCoo,
+      final P_min=P_min)
+    "Refrigerant cycle module for the cooling mode"
+    annotation(choicesAllMatching=true,
+      Placement(transformation(extent={{114,-18},{130,-2}})));
+end Miscellaneous;

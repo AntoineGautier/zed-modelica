@@ -1,13 +1,14 @@
 within ;
 model Annotations
-  replaceable package Medium=Buildings.Media.Water
+  replaceable package Medium = Buildings.Media.Water
     constrainedby Modelica.Media.Interfaces.PartialMedium
     "Medium model for all four fluid circuits"
     annotation(choices(
       choice(redeclare package Medium=Buildings.Media.Water "Water"),
       choice(redeclare replaceable package Medium=
         Buildings.Media.Antifreeze.PropyleneGlycolWater(property_T=293.15,
-          X_a=0.40) "Propylene glycol water, 40% mass fraction")));
+          X_a=0.40)
+        "Propylene glycol water, 40% mass fraction")));
   // Plants with AWHP.
   parameter Buildings.Templates.Plants.HeatPumps.Types.Distribution typDis_select1(
     start=Buildings.Templates.Plants.HeatPumps.Types.Distribution.Constant1Variable2) =

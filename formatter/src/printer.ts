@@ -93,6 +93,59 @@ function wrapContinuation(content: Doc, path: AstPath<ASTNode>): Doc {
 }
 
 /**
+ * Formats an assignment with proper spacing and line-break behavior.
+ * Used for both component declarations (via modification) and short class definitions.
+ *
+ * Pattern: ` = value` where:
+ * - Space before and after `=`
+ * - Line break after `=` if the assignment exceeds max line length
+ * - Value is indented on continuation lines
+ *
+ * @param rhsDoc - The right-hand side document (the value being assigned)
+ * @returns A grouped document with proper assignment formatting
+ */
+function formatAssignmentRhs(rhsDoc: Doc): Doc {
+  return group([" =", indent([line, rhsDoc])]);
+}
+
+/**
+ * Formats an assignment without spaces around `=` but with line-break behavior.
+ * Used for short class definitions inside class_modification (e.g., redeclare).
+ *
+ * Pattern: `=value` where:
+ * - No space around `=`
+ * - Line break after `=` if the assignment exceeds max line length
+ * - Value is indented on continuation lines (unless inside choices annotation)
+ *
+ * @param rhsDoc - The right-hand side document (the value being assigned)
+ * @param inChoices - Whether we're inside a choices annotation (no extra indent)
+ * @returns A grouped document with proper assignment formatting
+ */
+function formatAssignmentRhsCompact(rhsDoc: Doc, inChoices: boolean = false): Doc {
+  if (inChoices) {
+    // Inside choices: no extra indent, just allow line break
+    return group(["=", [softline, rhsDoc]]);
+  }
+  return group(["=", indent([softline, rhsDoc])]);
+}
+
+/**
+ * Formats a trailing description string or annotation clause.
+ * These appear at the end of declarations and should break to a new line
+ * with indentation when the line is too long.
+ *
+ * @param doc - The description string or annotation document
+ * @param inChoices - Whether we're inside a choices annotation (no extra indent)
+ * @returns A document with proper line break and indentation
+ */
+function formatTrailingDescription(doc: Doc, inChoices: boolean = false): Doc {
+  if (inChoices) {
+    return [line, doc];
+  }
+  return indent([line, doc]);
+}
+
+/**
  * Determines if an if-expression appears "mid-line" - i.e., after something
  * on the same line like `name=if ...` or `arg=if ...`.
  *
@@ -242,6 +295,30 @@ function isInsideAnnotation(path: AstPath<ASTNode>): boolean {
       const node = path.getParentNode(depth);
       if (!node) break;
       if (node.type === "annotation_clause") return true;
+      depth++;
+      if (depth > 50) break; // safety limit
+    }
+  } catch {
+    // path.getParentNode can throw if we go too far
+  }
+  return false;
+}
+
+/**
+ * Check if we're inside a class_modification (e.g., redeclare inside parentheses).
+ * Used to determine if short class definitions should have spaces around = or not.
+ * Top-level short class definitions get spaces, but redeclarations inside
+ * class_modification should follow the same no-space rule as other bindings.
+ */
+function isInsideClassModification(path: AstPath<ASTNode>): boolean {
+  let depth = 0;
+  try {
+    while (true) {
+      const node = path.getParentNode(depth);
+      if (!node) break;
+      if (node.type === "class_modification") return true;
+      // Stop at named_element - that's a top-level declaration
+      if (node.type === "named_element") return false;
       depth++;
       if (depth > 50) break; // safety limit
     }
@@ -581,31 +658,55 @@ export const printModelica: Printer<ASTNode>["print"] = (
 
     case "short_class_specifier": {
       // Format: IDENT = type_specifier [class_modification] [description_string]
+      // Uses same formatting rules as component declarations:
+      // - Space around = sign (only for top-level, not inside class_modification)
+      // - Line break after = if assignment exceeds max line length
+      // - Description string and annotation at new line and indented
       const parts: Doc[] = [];
       const inChoices = isInsideChoicesAnnotation(path);
+      const inClassMod = isInsideClassModification(path);
+
+      // Collect the RHS parts (type_specifier + class_modification) separately
+      // so we can wrap them together with the assignment formatting
+      const rhsParts: Doc[] = [];
+      // Collect trailing parts (description_string, annotation_clause) to add after RHS
+      const trailingParts: Doc[] = [];
 
       for (let i = 0; i < node.children.length; i++) {
         const child = node.children[i];
         if (child.type === "IDENT") {
           parts.push(child.text ?? "");
         } else if (child.type === "base_prefix") {
-          parts.push(path.call(print, "children", i), " ");
+          // base_prefix goes before the type_specifier in the RHS
+          rhsParts.push(path.call(print, "children", i), " ");
         } else if (child.type === "type_specifier") {
-          if (inChoices) {
-            // Inside choice(): allow breaking after = without extra indent
-            // Use softline so no space when it fits on one line
-            parts.push(group(["=", [softline, path.call(print, "children", i)]]));
-          } else {
-            parts.push("=", path.call(print, "children", i));
-          }
+          rhsParts.push(path.call(print, "children", i));
         } else if (child.type === "class_modification") {
-          parts.push(path.call(print, "children", i));
+          rhsParts.push(path.call(print, "children", i));
         } else if (child.type === "description_string") {
-          // Description stays on same line as preceding content (e.g., closing paren)
-          parts.push(" ", path.call(print, "children", i));
+          // Description string on new line with indent (same as component_declaration)
+          trailingParts.push(formatTrailingDescription(path.call(print, "children", i), inChoices));
+        } else if (child.type === "annotation_clause") {
+          // Annotation clause on new line with indent (same as component_declaration)
+          trailingParts.push(formatTrailingDescription(path.call(print, "children", i), inChoices));
         }
       }
-      return inChoices ? group(parts) : parts;
+
+      // Add the RHS with proper assignment formatting
+      if (rhsParts.length > 0) {
+        if (inClassMod) {
+          // Inside class_modification (e.g., redeclare): no space around = but allow line break
+          parts.push(formatAssignmentRhsCompact(rhsParts, inChoices));
+        } else {
+          // Top-level short class definition: space around = with line break support
+          parts.push(formatAssignmentRhs(rhsParts));
+        }
+      }
+
+      // Add trailing parts (description, annotation) after RHS
+      parts.push(...trailingParts);
+
+      return group(parts);
     }
 
     case "derivative_class_specifier":
@@ -789,16 +890,14 @@ export const printModelica: Printer<ASTNode>["print"] = (
           // Always allow line break before 'if' - Prettier decides based on line length
           parts.push(indent([line, "if ", path.call(print, "children", i)]));
         } else if (child.type === "description_string") {
-          // Break line before description string
-          // Inside choices: don't add extra indent (choice() already provides it)
-          if (isInsideChoicesAnnotation(path)) {
-            parts.push([line, path.call(print, "children", i)]);
-          } else {
-            parts.push(indent([line, path.call(print, "children", i)]));
-          }
+          // Break line before description string (use shared helper)
+          parts.push(formatTrailingDescription(
+            path.call(print, "children", i),
+            isInsideChoicesAnnotation(path)
+          ));
         } else if (child.type === "annotation_clause") {
-          // Break line before annotation, indented
-          parts.push(indent([line, path.call(print, "children", i)]));
+          // Break line before annotation (use shared helper)
+          parts.push(formatTrailingDescription(path.call(print, "children", i)));
         } else if (child.type === "comment") {
           parts.push(" ", path.call(print, "children", i));
         }
@@ -848,11 +947,9 @@ export const printModelica: Printer<ASTNode>["print"] = (
           child.type === "simple_expression"
         ) {
           if (isTopLevelAssignment) {
-            // For top-level assignments: "= " then expression
-            // Use group with line to break after = if line exceeds printWidth
-            parts.push(
-              group([" =", indent([line, path.call(print, "children", i)])]),
-            );
+            // For top-level assignments: use shared helper for consistent formatting
+            // with short_class_specifier
+            parts.push(formatAssignmentRhs(path.call(print, "children", i)));
           } else {
             // For attribute bindings: no space around =
             // Don't add indent here - function calls and other expressions handle their own indentation
@@ -2405,12 +2502,11 @@ export const printModelica: Printer<ASTNode>["print"] = (
 
     case "annotation_clause": {
       // Only add semicolon for class-level annotations (parent is long_class_specifier)
+      // For annotations inside short_class_specifier, the parent named_element adds the semicolon
       // For inline annotations (in named_element, component_declaration, connect_clause, etc.),
       // the parent adds the semicolon
       const parent = path.getParentNode();
-      const isClassLevel =
-        parent?.type === "long_class_specifier" ||
-        parent?.type === "short_class_specifier";
+      const isClassLevel = parent?.type === "long_class_specifier";
       if (isClassLevel) {
         return ["annotation", ...printChildren(path, print), ";"];
       }

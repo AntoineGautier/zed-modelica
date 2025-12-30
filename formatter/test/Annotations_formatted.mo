@@ -5,10 +5,22 @@ model Annotations
     "Medium model for all four fluid circuits"
     annotation(choices(
       choice(redeclare package Medium=Buildings.Media.Water "Water"),
-      choice(
-        redeclare replaceable package Medium=Buildings.Media.Antifreeze.PropyleneGlycolWater(
-          property_T=293.15,
+      choice(redeclare replaceable package Medium=
+        Buildings.Media.Antifreeze.PropyleneGlycolWater(property_T=293.15,
           X_a=0.40) "Propylene glycol water, 40% mass fraction")));
+  // Plants with AWHP.
+  parameter Buildings.Templates.Plants.HeatPumps.Types.Distribution typDis_select1(
+    start=Buildings.Templates.Plants.HeatPumps.Types.Distribution.Constant1Variable2) =
+    Buildings.Templates.Plants.HeatPumps.Types.Distribution.Constant1Variable2
+    "Type of distribution system"
+    annotation(Evaluate=true,
+      Dialog(group="Configuration",
+        enable=typ == Buildings.Templates.Components.Types.HeatPump.AirToWater),
+      choices(
+        choice=Buildings.Templates.Plants.HeatPumps.Types.Distribution.Variable1Only
+          "Variable primary-only",
+        choice=Buildings.Templates.Plants.HeatPumps.Types.Distribution.Constant1Variable2
+          "Constant primary - Variable secondary centralized"));
   parameter Boolean is_dpBalYPumSetCal(start=false) = false
     "Set to true to automatically size balancing valves or evaluate pump speed providing design flow"
     annotation(Evaluate=true,
@@ -24,15 +36,12 @@ model Annotations
       final typCtlEco=typCtlEco)
     "Outdoor air section"
     annotation(choices(
-      choice(
-        redeclare OutdoorSection.SingleDamper secOut
-          "Single damper for ventilation and economizer, with airflow measurement station"),
-      choice(
-        redeclare replaceable Buildings.Templates.AirHandlersFans.Components.OutdoorSection.DedicatedDampersAirflow secOut
-          "Separate dampers for ventilation and economizer, with airflow measurement station"),
-      choice(
-        redeclare replaceable Buildings.Templates.AirHandlersFans.Components.OutdoorSection.DedicatedDampersPressure secOut
-          "Separate dampers for ventilation and economizer, with differential pressure sensor")),
+      choice(redeclare OutdoorSection.SingleDamper secOut
+        "Single damper for ventilation and economizer, with airflow measurement station"),
+      choice(redeclare replaceable Buildings.Templates.AirHandlersFans.Components.OutdoorSection.DedicatedDampersAirflow secOut
+        "Separate dampers for ventilation and economizer, with airflow measurement station"),
+      choice(redeclare replaceable Buildings.Templates.AirHandlersFans.Components.OutdoorSection.DedicatedDampersPressure secOut
+        "Separate dampers for ventilation and economizer, with differential pressure sensor")),
       Dialog(group="Configuration"),
       Placement(transformation(extent={{-58,-94},{-22,-66}})));
   Buildings.Templates.Components.Interfaces.Bus bus

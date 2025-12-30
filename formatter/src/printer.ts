@@ -340,10 +340,14 @@ function isGraphicsArray(path: AstPath<ASTNode>): boolean {
  * (i.e., this is the choices(...) level, not a nested choice(...))
  */
 function isChoicesLevel(path: AstPath<ASTNode>): boolean {
+  // class_modification's parent is 'modification', grandparent is 'element_modification'
   const parent = path.getParentNode();
-  if (parent?.type === "element_modification") {
-    const nameChild = parent.children?.find((c) => c.type === "name");
-    if (nameChild?.text === "choices") return true;
+  if (parent?.type === "modification") {
+    const grandparent = path.getParentNode(1);
+    if (grandparent?.type === "element_modification") {
+      const nameChild = grandparent.children?.find((c) => c.type === "name");
+      if (nameChild?.text === "choices") return true;
+    }
   }
   return false;
 }
@@ -578,6 +582,7 @@ export const printModelica: Printer<ASTNode>["print"] = (
     case "short_class_specifier": {
       // Format: IDENT = type_specifier [class_modification] [description_string]
       const parts: Doc[] = [];
+      const inChoices = isInsideChoicesAnnotation(path);
 
       for (let i = 0; i < node.children.length; i++) {
         const child = node.children[i];
@@ -586,14 +591,21 @@ export const printModelica: Printer<ASTNode>["print"] = (
         } else if (child.type === "base_prefix") {
           parts.push(path.call(print, "children", i), " ");
         } else if (child.type === "type_specifier") {
-          parts.push("=", path.call(print, "children", i));
+          if (inChoices) {
+            // Inside choice(): allow breaking after = without extra indent
+            // Use softline so no space when it fits on one line
+            parts.push(group(["=", [softline, path.call(print, "children", i)]]));
+          } else {
+            parts.push("=", path.call(print, "children", i));
+          }
         } else if (child.type === "class_modification") {
           parts.push(path.call(print, "children", i));
         } else if (child.type === "description_string") {
+          // Description stays on same line as preceding content (e.g., closing paren)
           parts.push(" ", path.call(print, "children", i));
         }
       }
-      return parts;
+      return inChoices ? group(parts) : parts;
     }
 
     case "derivative_class_specifier":
@@ -777,8 +789,13 @@ export const printModelica: Printer<ASTNode>["print"] = (
           // Always allow line break before 'if' - Prettier decides based on line length
           parts.push(indent([line, "if ", path.call(print, "children", i)]));
         } else if (child.type === "description_string") {
-          // Break line before description string, indented
-          parts.push(indent([line, path.call(print, "children", i)]));
+          // Break line before description string
+          // Inside choices: don't add extra indent (choice() already provides it)
+          if (isInsideChoicesAnnotation(path)) {
+            parts.push([line, path.call(print, "children", i)]);
+          } else {
+            parts.push(indent([line, path.call(print, "children", i)]));
+          }
         } else if (child.type === "annotation_clause") {
           // Break line before annotation, indented
           parts.push(indent([line, path.call(print, "children", i)]));
@@ -838,7 +855,6 @@ export const printModelica: Printer<ASTNode>["print"] = (
             );
           } else {
             // For attribute bindings: no space around =
-            // In annotations, don't add indent to keep compact
             // Don't add indent here - function calls and other expressions handle their own indentation
             parts.push("=", path.call(print, "children", i));
           }
@@ -931,7 +947,8 @@ export const printModelica: Printer<ASTNode>["print"] = (
             ]);
           }
 
-          // Check if inside choices (e.g., choice() content) - use line so Prettier decides based on 80 chars
+          // Check if inside choices (e.g., choice() content)
+          // Don't break after '(' - only allow breaking within content
           if (isInsideChoicesAnnotation(path)) {
             const argListNode = node.children.find(
               (c) => c.type === "argument_list",
@@ -948,12 +965,8 @@ export const printModelica: Printer<ASTNode>["print"] = (
                 path.call(print, "children", argListIndex, "children", i),
               );
             }
-            // Use softline (not line) so there's no space after '(' when content fits on one line
-            return group([
-              "(",
-              indent([softline, join([",", line], elementArgs)]),
-              ")",
-            ]);
+            // Keep '(' attached to content, only break within content or between args
+            return group(["(", indent(join([",", line], elementArgs)), ")"]);
           }
 
           // For nested class_modifications in annotations (like Icon(...), Placement(...)),
@@ -1053,6 +1066,33 @@ export const printModelica: Printer<ASTNode>["print"] = (
       const prefix = extractModificationPrefix(node);
       if (prefix) {
         parts.push(prefix, " ");
+      }
+
+      // Check if this is a choice=Value "description" element inside choices annotation
+      const nameChild = node.children.find((c) => c.type === "name");
+      const hasDescriptionString = node.children.some((c) => c.type === "description_string");
+      const isChoiceAssignment =
+        nameChild?.text === "choice" &&
+        node.children.some((c) => c.type === "modification") &&
+        hasDescriptionString &&
+        isInsideChoicesAnnotation(path);
+
+      if (isChoiceAssignment) {
+        // Format choice=Value "description" with line breaking support
+        // Don't break after =, only allow breaking between value and description
+        for (let i = 0; i < node.children.length; i++) {
+          const child = node.children[i];
+          if (child.type === "name") {
+            parts.push(path.call(print, "children", i));
+          } else if (child.type === "modification") {
+            parts.push(path.call(print, "children", i));
+          } else if (child.type === "description_string") {
+            // Allow breaking before description string with indent
+            parts.push(indent([line, path.call(print, "children", i)]));
+          }
+        }
+        // Wrap in group so it can break between value and description if needed
+        return group(parts);
       }
 
       for (let i = 0; i < node.children.length; i++) {

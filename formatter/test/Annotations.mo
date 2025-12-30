@@ -10,6 +10,17 @@ replaceable package Medium=Buildings.Media.Water
           Buildings.Media.Antifreeze.PropyleneGlycolWater (
       property_T=293.15,X_a=0.40)
       "Propylene glycol water, 40% mass fraction")));
+  // Plants with AWHP.
+  parameter Buildings.Templates.Plants.HeatPumps.Types.Distribution typDis_select1(
+    start=Buildings.Templates.Plants.HeatPumps.Types.Distribution.Constant1Variable2) =
+    Buildings.Templates.Plants.HeatPumps.Types.Distribution.Constant1Variable2
+    "Type of distribution system"
+    annotation(Evaluate=true,
+      Dialog(group="Configuration",
+        enable=typ == Buildings.Templates.Components.Types.HeatPump.AirToWater),
+      choices(
+        choice=Buildings.Templates.Plants.HeatPumps.Types.Distribution.Variable1Only "Variable primary-only",
+        choice=Buildings.Templates.Plants.HeatPumps.Types.Distribution.Constant1Variable2 "Constant primary - Variable secondary centralized"));
   parameter Boolean is_dpBalYPumSetCal(start=false)=false
     "Set to true to automatically size balancing valves or evaluate pump speed providing design flow"
     annotation(Evaluate=true, Dialog(tab="Advanced",

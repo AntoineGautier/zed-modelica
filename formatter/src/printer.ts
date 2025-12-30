@@ -710,15 +710,60 @@ export const printModelica: Printer<ASTNode>["print"] = (
     }
 
     case "derivative_class_specifier":
-    case "enumeration_class_specifier":
     case "extends_class_specifier":
       return printChildrenWithSpaces(path, print);
 
-    case "enum_list":
-      return join(", ", path.map(print, "children"));
+    case "enumeration_class_specifier": {
+      // Format: IDENT = enumeration(enum_list) [description_string] [annotation_clause]
+      const parts: Doc[] = [];
+      
+      for (let i = 0; i < node.children.length; i++) {
+        const child = node.children[i];
+        if (child.type === "IDENT") {
+          parts.push(child.text ?? "");
+          parts.push(" = enumeration(");
+        } else if (child.type === "enum_list") {
+          // Indent the enum list and put closing paren after
+          parts.push(indent([softline, path.call(print, "children", i)]));
+          parts.push(")");
+        } else if (child.type === "description_string") {
+          // Description string on new line with indent
+          parts.push(indent([line, path.call(print, "children", i)]));
+        } else if (child.type === "annotation_clause") {
+          // Annotation clause on new line with indent
+          parts.push(indent([line, path.call(print, "children", i)]));
+        }
+      }
+      
+      return group(parts);
+    }
 
-    case "enumeration_literal":
-      return printChildrenWithSpaces(path, print);
+    case "enum_list": {
+      // Each enumeration literal on its own line, separated by commas
+      const literals = path.map(print, "children");
+      const parts: Doc[] = [];
+      for (let i = 0; i < literals.length; i++) {
+        if (i > 0) {
+          parts.push(",", hardline);
+        }
+        parts.push(literals[i]);
+      }
+      return parts;
+    }
+
+    case "enumeration_literal": {
+      // Format: IDENT [description_string]
+      const parts: Doc[] = [];
+      for (let i = 0; i < node.children.length; i++) {
+        const child = node.children[i];
+        if (child.type === "IDENT") {
+          parts.push(child.text ?? "");
+        } else if (child.type === "description_string") {
+          parts.push(" ", path.call(print, "children", i));
+        }
+      }
+      return parts;
+    }
 
     case "base_prefix":
       return node.text ?? "";
@@ -763,12 +808,20 @@ export const printModelica: Printer<ASTNode>["print"] = (
         (c) => c.type === "annotation_clause",
       );
 
-      // Check if class_definition contains a short_class_specifier (needs semicolon)
+      // Check if class_definition contains a short-form specifier (needs semicolon)
       // vs long_class_specifier (already ends with "end ClassName;")
+      // Short-form specifiers include: short_class_specifier, enumeration_class_specifier,
+      // derivative_class_specifier, extends_class_specifier
       const hasShortClassDefinition = node.children.some(
         (c) =>
           c.type === "class_definition" &&
-          c.children.some((cc: any) => cc.type === "short_class_specifier"),
+          c.children.some(
+            (cc: any) =>
+              cc.type === "short_class_specifier" ||
+              cc.type === "enumeration_class_specifier" ||
+              cc.type === "derivative_class_specifier" ||
+              cc.type === "extends_class_specifier",
+          ),
       );
 
       for (let i = 0; i < node.children.length; i++) {

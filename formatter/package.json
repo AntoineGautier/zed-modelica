@@ -26,7 +26,8 @@
     "prepublishOnly": "npm run clean && npm run build",
     "format": "node dist/cli.js",
     "parse": "tsx src/cli.ts",
-    "test": "npm run build && bash test/run-tests.sh"
+    "test": "npm run build && bash test/run-tests.sh",
+    "test:idempotence": "node test/verify-idempotence.js"
   },
   "keywords": [
     "prettier",

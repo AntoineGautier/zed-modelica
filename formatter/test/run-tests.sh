@@ -37,11 +37,14 @@ echo "Checking for differences..."
 
 # Check for git diffs in the test directory
 if git diff --exit-code --quiet HEAD -- "$TEST_DIR"/*.mo; then
-    echo "✓ All tests passed! No formatting differences detected."
-    exit 0
+    echo "✓ No formatting differences detected."
 else
     echo "✗ Formatting differences detected:"
     echo ""
     git diff HEAD -- "$TEST_DIR"/*.mo
     exit 1
 fi
+
+echo ""
+echo "Running idempotence test..."
+node "$TEST_DIR/verify-idempotence.js"

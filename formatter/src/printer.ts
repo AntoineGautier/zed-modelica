@@ -49,11 +49,9 @@ function isInContinuationContext(path: AstPath<ASTNode>): boolean {
     // Binary expressions inside if conditions should still indent their own continuations
     // The if_expression only handles indent for then/else, not the condition's internal structure
 
-    // If we're inside a parenthesized_expression, we're in continuation context
-    // The parenthesized_expression adds indent for its content
-    if (ancestor.type === "parenthesized_expression") {
-      return true;
-    }
+    // NOTE: parenthesized_expression is NOT a continuation context
+    // It doesn't add indent - inner constructs handle their own indentation
+    // This allows binary expressions inside parens to add continuation indent for right operands
 
     // If we're inside a named_argument, we're in continuation context
     // The named_argument already adds indent for its value
@@ -69,6 +67,30 @@ function isInContinuationContext(path: AstPath<ASTNode>): boolean {
     if (ancestor.type === "element") break;
     if (ancestor.type === "function_call_args") break;
     if (ancestor.type === "if_expression") break;
+    // parenthesized_expression is a boundary ONLY when it's an operand of a binary_expression
+    // This allows `then (if ... then X else Y)` to inherit continuation from outer then
+    // But prevents `(func1() - func2()) * mLiq` inner binary from seeing outer binary
+    // Check a few levels up for binary_expression (through simple_expression, primary_expression wrappers)
+    if (ancestor.type === "parenthesized_expression") {
+      let isParenInBinaryExpr = false;
+      for (let j = 1; j <= 3; j++) {
+        const outerAncestor = path.getParentNode(i + j);
+        if (!outerAncestor) break;
+        if (outerAncestor.type === "binary_expression") {
+          // Paren is (indirectly) operand of binary expr - it's a boundary
+          isParenInBinaryExpr = true;
+          break;
+        }
+        // Keep looking through simple_expression, primary_expression wrappers
+        if (outerAncestor.type !== "simple_expression" && outerAncestor.type !== "primary_expression") {
+          break; // Hit something else, not in binary expr
+        }
+      }
+      if (isParenInBinaryExpr) {
+        break; // Paren is operand of binary expr - boundary, stop searching
+      }
+      // Paren is not an operand of binary expr - not a boundary, continue searching upward
+    }
   }
   return false;
 }
@@ -716,7 +738,7 @@ export const printModelica: Printer<ASTNode>["print"] = (
     case "enumeration_class_specifier": {
       // Format: IDENT = enumeration(enum_list) [description_string] [annotation_clause]
       const parts: Doc[] = [];
-      
+
       for (let i = 0; i < node.children.length; i++) {
         const child = node.children[i];
         if (child.type === "IDENT") {
@@ -734,7 +756,7 @@ export const printModelica: Printer<ASTNode>["print"] = (
           parts.push(indent([line, path.call(print, "children", i)]));
         }
       }
-      
+
       return group(parts);
     }
 
@@ -2062,12 +2084,11 @@ export const printModelica: Printer<ASTNode>["print"] = (
       return node.text ?? "";
 
     case "parenthesized_expression": {
-      // Wrap in parens with indent for multi-line content
-      // Content starts on same line as '(', breaks with indent if needed
-      // The content inside parentheses should always be indented relative to
-      // the opening paren when it breaks to multiple lines
+      // Wrap in parens - content starts on same line as '('
+      // Don't add indent here - inner constructs (binary_expression, function_call_args)
+      // handle their own indentation. This avoids double indent issues.
       const content = path.map(print, "children");
-      return group(["(", indent(content), ")"]);
+      return group(["(", content, ")"]);
     }
 
     case "output_expression_list":
@@ -2140,7 +2161,7 @@ export const printModelica: Printer<ASTNode>["print"] = (
 
       // Non-annotation arrays: delegate to array_arguments which handles fill
       if (args.length === 0) return "{}";
-      
+
       // args[0] is the formatted array_arguments - wrap with braces
       // Braces stay attached to first/last elements, indent for continuation
       return group(["{", indent(args[0]), "}"]);
@@ -2281,6 +2302,8 @@ export const printModelica: Printer<ASTNode>["print"] = (
         return false;
       })();
 
+
+
       if (inAnnotation) {
         // Get the parent to check what kind of function this is
         const parent = path.getParentNode();
@@ -2372,64 +2395,62 @@ export const printModelica: Printer<ASTNode>["print"] = (
         return group(["(", indent([softline, join([",", line], args), ")"])]);
       }
 
-      // Check if this is a simple single-argument function call
-      const firstChild = node.children[0];
-      const isSingleArg =
-        firstChild &&
-        (firstChild.type === "function_arguments" ||
-          firstChild.type === "named_arguments") &&
-        firstChild.children.length === 1;
+      // Extract all arguments from both function_arguments and named_arguments children
+      // The structure can be: ( function_arguments , named_arguments ) or just one of them
+      // This fixes the bug where named arguments were being dropped when mixed with positional args
+      const allArgs: Doc[] = [];
+      for (let i = 0; i < node.children.length; i++) {
+        const child = node.children[i];
+        if (
+          child.type === "function_arguments" ||
+          child.type === "named_arguments"
+        ) {
+          // Get individual args from this child, filtering out commas
+          for (let j = 0; j < child.children.length; j++) {
+            const argChild = child.children[j];
+            if (argChild.type !== "," && argChild.text !== ",") {
+              allArgs.push(path.call(print, "children", i, "children", j));
+            }
+          }
+        }
+      }
 
-      if (isSingleArg) {
+      if (allArgs.length === 0) return "()";
+      if (allArgs.length === 1) {
         // Single-argument call - allow breaking if line exceeds limit
         // Use softline after "(" so arg can go on new line if needed
         if (isInNamedArgument) {
-          return group(["(", softline, args[0], ")"]);
+          return group(["(", softline, allArgs[0], ")"]);
         }
-        return group(["(", indent([softline, args[0]]), ")"]);
+        return group(["(", indent([softline, allArgs[0]]), ")"]);
       }
 
-      // First arg on same line, rest indented, closing paren on same line as last element
-      // Need to extract individual arguments from function_arguments/named_arguments
-      const argsChild = node.children[0];
-      if (
-        argsChild &&
-        (argsChild.type === "named_arguments" ||
-          argsChild.type === "function_arguments")
-      ) {
-        const individualArgs: Doc[] = [];
-        for (let i = 0; i < argsChild.children.length; i++) {
-          individualArgs.push(path.call(print, "children", 0, "children", i));
-        }
-        if (individualArgs.length === 0) return "()";
-        if (individualArgs.length === 1)
-          return group(["(", individualArgs[0], ")"]);
-        // For regular function calls (not in annotations):
-        // - Try to fit everything on one line
-        // - If it doesn't fit, break after opening paren and indent all args
-        // - Closing paren on same line as last arg
-        // - If inside named_argument, skip indent (parent already provides it)
-        if (isInNamedArgument) {
-          return group(["(", softline, join([",", line], individualArgs), ")"]);
-        }
-        return group([
-          "(",
-          indent([softline, join([",", line], individualArgs)]),
-          ")",
-        ]);
-      }
-
-      // Fallback - same pattern
+      // Multiple arguments:
+      // - Try to fit everything on one line
+      // - If it doesn't fit, break after opening paren and indent all args
+      // - Closing paren on same line as last arg
+      // - If inside named_argument, skip indent (parent already provides it)
       if (isInNamedArgument) {
-        return group(["(", softline, join([",", line], args), ")"]);
+        return group(["(", softline, join([",", line], allArgs), ")"]);
       }
-      return group(["(", indent([softline, join([",", line], args)]), ")"]);
+      return group([
+        "(",
+        indent([softline, join([",", line], allArgs)]),
+        ")",
+      ]);
     }
 
     case "function_arguments": {
       const inAnnotation = isInsideAnnotation(path);
+      // Filter out comma punctuation - commas are children but we join with commas
       if (inAnnotation) {
-        const args = path.map(print, "children");
+        const args: Doc[] = [];
+        for (let i = 0; i < node.children.length; i++) {
+          const child = node.children[i];
+          if (child.type !== "," && child.text !== ",") {
+            args.push(path.call(print, "children", i));
+          }
+        }
 
         // Check if we're inside choices - each choice on its own line
         if (isInsideChoicesAnnotation(path)) {
@@ -2451,13 +2472,28 @@ export const printModelica: Printer<ASTNode>["print"] = (
         }
         return fill(fillItems);
       }
-      return join([",", line], path.map(print, "children"));
+      // Filter out comma punctuation
+      const nonCommaArgs: Doc[] = [];
+      for (let i = 0; i < node.children.length; i++) {
+        const child = node.children[i];
+        if (child.type !== "," && child.text !== ",") {
+          nonCommaArgs.push(path.call(print, "children", i));
+        }
+      }
+      return join([",", line], nonCommaArgs);
     }
 
     case "named_arguments": {
       const inAnnotation = isInsideAnnotation(path);
+      // Filter out comma punctuation - commas are children but we join with commas
       if (inAnnotation) {
-        const args = path.map(print, "children");
+        const args: Doc[] = [];
+        for (let i = 0; i < node.children.length; i++) {
+          const child = node.children[i];
+          if (child.type !== "," && child.text !== ",") {
+            args.push(path.call(print, "children", i));
+          }
+        }
 
         // Check if we're inside choices - each choice on its own line
         if (isInsideChoicesAnnotation(path)) {
@@ -2479,7 +2515,15 @@ export const printModelica: Printer<ASTNode>["print"] = (
         }
         return fill(fillItems);
       }
-      return join([",", line], path.map(print, "children"));
+      // Filter out comma punctuation
+      const nonCommaNamedArgs: Doc[] = [];
+      for (let i = 0; i < node.children.length; i++) {
+        const child = node.children[i];
+        if (child.type !== "," && child.text !== ",") {
+          nonCommaNamedArgs.push(path.call(print, "children", i));
+        }
+      }
+      return join([",", line], nonCommaNamedArgs);
     }
 
     case "named_argument": {

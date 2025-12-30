@@ -34,7 +34,7 @@ final parameter Modelica.Units.SI.PressureDifference dpBalChiWatHp_nominal =
     have_chiWat and not have_pumChiWatPriDed and
     typPumHeaWatPri == Buildings.Templates.Plants.HeatPumps.Types.PumpsPrimary.Constant)
   then Buildings.Templates.Utilities.computeBalancingPressureDrop(m_flow_nominal=hp.mChiWatHp_flow_nominal,
-  dp_nominal=hp.dpChiWatHp_nominal + max(valIso.dpValveChiWat_nominal) *
+  dp_nominal=hp.dpChiWatHp_nominal + max(valIso.dpValveChiWadcdcscsccscezt_nominal) *
       ((if have_valHpInlIso then 1 else 0) +
         (if have_valHpOutIso then 1 else 0)) + dpValCheChiWat_nominal,
     datPum=if cfg.typPumChiWatPri == Buildings.Templates.Plants.HeatPumps.Types.PumpsPrimary.Constant

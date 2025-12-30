@@ -8,7 +8,7 @@ import { doc } from "prettier";
 import type { ASTNode } from "./parser.js";
 
 const { builders } = doc;
-const { group, indent, line, softline, hardline, join, fill } = builders;
+const { group, indent, line, softline, hardline, join, fill, conditionalGroup } = builders;
 
 // ===========================================
 // Centralized Continuation Line Handling
@@ -92,32 +92,35 @@ function isInsideIfExpressionValue(path: AstPath<ASTNode>): boolean {
  * - function_call_args (each function call is its own context)
  */
 function isInContinuationContext(path: AstPath<ASTNode>): boolean {
-  const currentNode = path.getValue();
-
-  // NOTE: We do NOT check isInsideIfExpressionValue here.
-  // Binary expressions inside if_expression then/else values should still add
-  // their own continuation indent. The if_expression's indent is for its
-  // then/else keywords, not for the values' internal structure.
-
   // Start from i=1 to skip the current node itself
   for (let i = 1; i < 15; i++) {
     const ancestor = path.getParentNode(i);
     if (!ancestor) break;
 
-    // If we're nested inside another binary_expression, we're in continuation context
-    // The outer binary_expression already handles indentation for its operands
-    if (ancestor.type === "binary_expression" && ancestor !== currentNode) {
-      return true;
-    }
-
-    // NOTE: parenthesized_expression is NOT a continuation context
-    // It doesn't add indent - inner constructs handle their own indentation
-    // This allows binary expressions inside parens to add continuation indent for right operands
+    // NOTE: binary_expression is NOT a continuation context since it no longer adds indent
+    // This allows parenthesized_expression and other constructs to add their own indent
 
     // If we're inside a named_argument, we're in continuation context
     // The named_argument already adds indent for its value
     if (ancestor.type === "named_argument") {
       return true;
+    }
+
+    // If we're inside a parenthesized_expression, we're in continuation context
+    // The parenthesized_expression adds indent for its content
+    if (ancestor.type === "parenthesized_expression") {
+      return true;
+    }
+
+    // If we're inside an if_expression's then/else value, we're in continuation context
+    // The if_expression adds indent for its then/else values
+    // But NOT for the condition part - use isInsideIfExpressionValue to check properly
+    if (ancestor.type === "if_expression") {
+      // Use the existing helper to check if we're in a then/else value (not condition)
+      if (isInsideIfExpressionValue(path)) {
+        return true;
+      }
+      // We're in the condition - not continuation context, continue searching
     }
 
     // Stop at these boundaries - they reset the continuation context
@@ -127,30 +130,6 @@ function isInContinuationContext(path: AstPath<ASTNode>): boolean {
     if (ancestor.type === "statement") break;
     if (ancestor.type === "element") break;
     if (ancestor.type === "function_call_args") break;
-    // parenthesized_expression is a boundary ONLY when it's an operand of a binary_expression
-    // This allows `then (if ... then X else Y)` to inherit continuation from outer then
-    // But prevents `(func1() - func2()) * mLiq` inner binary from seeing outer binary
-    // Check a few levels up for binary_expression (through simple_expression, primary_expression wrappers)
-    if (ancestor.type === "parenthesized_expression") {
-      let isParenInBinaryExpr = false;
-      for (let j = 1; j <= 3; j++) {
-        const outerAncestor = path.getParentNode(i + j);
-        if (!outerAncestor) break;
-        if (outerAncestor.type === "binary_expression") {
-          // Paren is (indirectly) operand of binary expr - it's a boundary
-          isParenInBinaryExpr = true;
-          break;
-        }
-        // Keep looking through simple_expression, primary_expression wrappers
-        if (outerAncestor.type !== "simple_expression" && outerAncestor.type !== "primary_expression") {
-          break; // Hit something else, not in binary expr
-        }
-      }
-      if (isParenInBinaryExpr) {
-        break; // Paren is operand of binary expr - boundary, stop searching
-      }
-      // Paren is not an operand of binary expr - not a boundary, continue searching upward
-    }
   }
   return false;
 }
@@ -1802,11 +1781,12 @@ export const printModelica: Printer<ASTNode>["print"] = (
       }
 
       // Build then clause: "then " followed by then-value
-      // The then-value handles its own breaking (e.g., function args break)
-      const thenClause: Doc = ["then ", thenExprDoc];
+      // Add indent for the value so continuation lines are indented
+      const thenClause: Doc = ["then ", indent(thenExprDoc)];
 
       // Build else clause
-      const elseClause: Doc = ["else ", elseExprDoc];
+      // Add indent for the value so continuation lines are indented
+      const elseClause: Doc = ["else ", indent(elseExprDoc)];
 
       // Single formatting pattern for all cases:
       // group([keyword, condition, line, thenClause]) - the inner group decides
@@ -1988,6 +1968,7 @@ export const printModelica: Printer<ASTNode>["print"] = (
           // Flatten same-precedence arithmetic operators into a single structure.
           // This avoids nested groups that cause cascading indentation.
           const operands: Doc[] = [];
+          const operandNodes: ASTNode[] = []; // Track AST nodes for type checking
           const ops: string[] = [];
 
           // Helper to unwrap simple_expression to find binary_expression
@@ -1997,6 +1978,19 @@ export const printModelica: Printer<ASTNode>["print"] = (
               return unwrapToBinary(n.children[0]);
             }
             return null;
+          };
+
+          // Helper to unwrap expression wrappers to find the core node type
+          const unwrapToCore = (n: ASTNode): ASTNode => {
+            if (
+              (n.type === "simple_expression" ||
+                n.type === "primary_expression" ||
+                n.type === "expression") &&
+              n.children?.length === 1
+            ) {
+              return unwrapToCore(n.children[0]);
+            }
+            return n;
           };
 
           // Recursive flatten - collects all operands and operators
@@ -2045,6 +2039,7 @@ export const printModelica: Printer<ASTNode>["print"] = (
             }
             // Base case - not an arithmetic binary_expression, print normally
             operands.push(print(p));
+            operandNodes.push(unwrapToCore(n));
           };
 
           flatten(path);
@@ -2078,29 +2073,85 @@ export const printModelica: Printer<ASTNode>["print"] = (
           // in consistent indentation for all continuation lines.
           const inContinuation = isInContinuationContext(path);
 
+          // Helper to check if an operand is "huggable" - should stay inline with operator
+          // when possible, allowing internal breaks before breaking before the operand
+          const isHuggable = (n: ASTNode): boolean => {
+            return (
+              n.type === "function_application" ||
+              n.type === "parenthesized_expression" ||
+              n.type === "array_constructor"
+            );
+          };
+
           // Build the continuation parts (everything after first operand)
-          const continuationParts: Doc[] = [];
+          // We need to handle huggable vs non-huggable operands differently:
+          // - Huggable operands (function calls, parens, arrays) handle their own indentation
+          // - Non-huggable operands need outer indent wrapper
+          const parts: Doc[] = [operands[0]];
+          
           for (let i = 0; i < ops.length; i++) {
-            continuationParts.push(" ", ops[i], group([line, operands[i + 1]]));
+            const operand = operands[i + 1];
+            const operandNode = operandNodes[i + 1];
+
+            if (operandNode && isHuggable(operandNode)) {
+              // For huggable operands (function calls, parens, arrays), use conditionalGroup
+              // to try multiple layouts in order:
+              // 1. All inline - operand fits without any breaks
+              // 2. Operator inline, operand breaks internally (e.g., "* min(\n  args)")
+              // 3. Break before operand (fallback)
+              // For option 3: add indent if not already in continuation context
+              const option3: Doc = inContinuation
+                ? [" ", ops[i], group([line, operand])]
+                : [" ", ops[i], indent(group([line, operand]))];
+              // For option 2: parenthesized_expression needs indent wrapper since shouldBreak
+              // alone doesn't trigger the paren's internal indent (no line breaks inside simple content)
+              const option2Operand = operandNode.type === "parenthesized_expression"
+                ? indent(group(operand, { shouldBreak: true }))
+                : group(operand, { shouldBreak: true });
+              parts.push(
+                conditionalGroup([
+                  // Option 1: all inline
+                  [" ", ops[i], " ", operand],
+                  // Option 2: operator inline, operand breaks internally
+                  [" ", ops[i], " ", option2Operand],
+                  // Option 3: break before operand
+                  option3,
+                ]),
+              );
+            } else {
+              // Non-huggable operands: use group with line to allow breaking before
+              // Apply indent for continuation
+              if (inContinuation) {
+                parts.push(" ", ops[i], group([line, operand]));
+              } else {
+                parts.push(" ", ops[i], indent(group([line, operand])));
+              }
+            }
           }
 
-          if (inContinuation) {
-            // Already in continuation context - no additional indent needed
-            return group([operands[0], ...continuationParts]);
-          } else {
-            // Wrap all continuations in shared indent so all lines get same indent
-            return group([operands[0], indent(continuationParts)]);
-          }
+          return group(parts);
         }
 
-        // Short expressions and comparisons: stay inline
-        return [
+        // Comparison operators: allow breaking with proper continuation indentation
+        // Use wrapContinuation to add indent when not already in continuation context
+        const comparisonOperators = ["==", "<>", "<", ">", "<=", ">="];
+        if (comparisonOperators.includes(operator)) {
+          return group([
+            path.call(print, "children", 0),
+            " ",
+            operator,
+            wrapContinuation(path.call(print, "children", 1), path),
+          ]);
+        }
+
+        // Other short expressions: allow breaking with proper indentation
+        // Use group with line so parent indent (e.g., from parenthesized_expression) can apply
+        return group([
           path.call(print, "children", 0),
           " ",
           operator,
-          " ",
-          path.call(print, "children", 1),
-        ];
+          group([line, path.call(print, "children", 1)]),
+        ]);
       }
 
       // Fallback
@@ -2150,10 +2201,15 @@ export const printModelica: Printer<ASTNode>["print"] = (
 
     case "parenthesized_expression": {
       // Wrap in parens - content starts on same line as '('
-      // Don't add indent here - inner constructs (binary_expression, function_call_args)
-      // handle their own indentation. This avoids double indent issues.
+      // Add indent for content when it breaks, but only if not already in continuation context
       const content = path.map(print, "children");
-      return group(["(", content, ")"]);
+
+      if (isInContinuationContext(path)) {
+        // Already in continuation context - no additional indent
+        return group(["(", content, ")"]);
+      }
+      // Not in continuation context - add indent for breaks
+      return group(["(", indent(content), ")"]);
     }
 
     case "output_expression_list":
@@ -2224,12 +2280,12 @@ export const printModelica: Printer<ASTNode>["print"] = (
         return group(["{", join([",", line], args), "}"]);
       }
 
-      // Non-annotation arrays: delegate to array_arguments which handles fill
+      // Non-annotation arrays: delegate to array_arguments which handles breaking
       if (args.length === 0) return "{}";
 
       // args[0] is the formatted array_arguments - wrap with braces
-      // Braces stay attached to first/last elements, indent for continuation
-      return group(["{", indent(args[0]), "}"]);
+      // array_arguments handles its own indentation for continuation elements
+      return group(["{", args[0], "}"]);
     }
 
     case "array_arguments": {
@@ -2269,17 +2325,17 @@ export const printModelica: Printer<ASTNode>["print"] = (
         // Default: comma-separated without spaces for compact arrays
         return join(",", args);
       }
-      // Non-annotation: use fill to wrap at line length
-      // Braces stay attached to first/last elements (no softline at start/end)
-      // Build fill items: [elem1, ",", line, elem2, ",", line, elem3, ...]
-      const fillItems: Doc[] = [];
-      for (let i = 0; i < args.length; i++) {
-        if (i > 0) {
-          fillItems.push(",", line);
-        }
-        fillItems.push(args[i]);
+      // Non-annotation: first element hugs opener, subsequent elements break with continuation indent
+      // Pattern: {elem1,\n  elem2,\n  elem3}
+      if (args.length === 0) return "";
+      if (args.length === 1) return args[0];
+
+      // First element inline, rest can break with continuation indent
+      const continuationParts: Doc[] = [];
+      for (let i = 1; i < args.length; i++) {
+        continuationParts.push(",", group([line, args[i]]));
       }
-      return fill(fillItems);
+      return [args[0], indent(continuationParts)];
     }
 
     case "array_concatenation": {
@@ -2349,23 +2405,7 @@ export const printModelica: Printer<ASTNode>["print"] = (
       const args = path.map(print, "children");
       const inAnnotation = isInsideAnnotation(path);
 
-      // Check if we're directly inside a named_argument to avoid cumulative indent
-      // named_argument already adds indent, so we shouldn't add more
-      const isInNamedArgument = (() => {
-        // Walk up parent chain looking for named_argument before hitting function_call_args boundary
-        for (let i = 0; i < 10; i++) {
-          const ancestor = path.getParentNode(i);
-          if (!ancestor) break;
-          if (ancestor.type === "named_argument") return true;
-          if (ancestor.type === "function_call_args" && i > 0) break; // Another function_call_args = nested call
-          if (
-            ancestor.type === "declaration" ||
-            ancestor.type === "component_declaration"
-          )
-            break;
-        }
-        return false;
-      })();
+
 
 
 
@@ -2481,10 +2521,14 @@ export const printModelica: Printer<ASTNode>["print"] = (
       }
 
       if (allArgs.length === 0) return "()";
+      
+      // Check if we're in a continuation context - if so, skip indent (parent already provides it)
+      const inContinuation = isInContinuationContext(path);
+      
       if (allArgs.length === 1) {
         // Single-argument call - allow breaking if line exceeds limit
         // Use softline after "(" so arg can go on new line if needed
-        if (isInNamedArgument) {
+        if (inContinuation) {
           return group(["(", softline, allArgs[0], ")"]);
         }
         return group(["(", indent([softline, allArgs[0]]), ")"]);
@@ -2494,8 +2538,8 @@ export const printModelica: Printer<ASTNode>["print"] = (
       // - Try to fit everything on one line
       // - If it doesn't fit, break after opening paren and indent all args
       // - Closing paren on same line as last arg
-      // - If inside named_argument, skip indent (parent already provides it)
-      if (isInNamedArgument) {
+      // - If in continuation context, skip indent (parent already provides it)
+      if (inContinuation) {
         return group(["(", softline, join([",", line], allArgs), ")"]);
       }
       return group([

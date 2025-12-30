@@ -15,24 +15,89 @@ const { group, indent, line, softline, hardline, join, fill } = builders;
 // ===========================================
 
 /**
+ * Checks if a node at a given index in an if_expression is a then/else VALUE
+ * (as opposed to the condition). In an if_expression:
+ * - children[0] is the condition
+ * - children[1] is the then-value
+ * - children[2+] are else_if_clause or the else-value
+ *
+ * @param ifExpr - The if_expression node
+ * @param childIndex - The index of the child we're checking
+ * @returns true if the child is a then-value or else-value (not condition)
+ */
+function isIfExpressionValue(ifExpr: ASTNode, childIndex: number): boolean {
+  // children[0] is always the condition
+  // children[1] is the then-value (unless it's an else_if_clause, which shouldn't happen)
+  // children[2+] are either else_if_clause or the final else-value
+  if (childIndex === 0) return false; // condition
+  if (childIndex === 1) return true; // then-value
+  // For index >= 2, check if it's NOT an else_if_clause (those have their own handling)
+  const child = ifExpr.children[childIndex];
+  return child && child.type !== "else_if_clause";
+}
+
+/**
+ * Determines if the current path is inside an if_expression's then or else VALUE
+ * (not the condition). This is used to propagate continuation context through
+ * nested if-expressions.
+ *
+ * For example, in: `then (if X then Y else Z)`
+ * The inner if_expression should know it's inside the outer then's value,
+ * so its own then/else keywords should be indented.
+ */
+function isInsideIfExpressionValue(path: AstPath<ASTNode>): boolean {
+  // Walk up the parent chain looking for if_expression
+  // We need to check if we're in the then/else VALUE, not the condition
+  for (let i = 1; i < 20; i++) {
+    const ancestor = path.getParentNode(i);
+    if (!ancestor) break;
+
+    if (ancestor.type === "if_expression") {
+      // Found an if_expression ancestor. Now check which child we came from.
+      // We need to find the child at index i-1 and check its position in the if_expression
+      const prevAncestor = path.getParentNode(i - 1);
+      if (!prevAncestor) break;
+
+      // Find the index of prevAncestor in ancestor.children
+      const childIndex = ancestor.children.findIndex((c) => c === prevAncestor);
+      if (childIndex >= 0 && isIfExpressionValue(ancestor, childIndex)) {
+        return true;
+      }
+      // If we're in the condition, don't count this as continuation context
+      // but keep looking for outer if_expressions
+    }
+
+    // Stop at major boundaries
+    if (ancestor.type === "declaration") break;
+    if (ancestor.type === "component_declaration") break;
+    if (ancestor.type === "equation") break;
+    if (ancestor.type === "statement") break;
+    if (ancestor.type === "element") break;
+  }
+  return false;
+}
+
+/**
  * Determines if the current path is inside a context that has already
  * added continuation indentation. This prevents cumulative/stacking indents.
  *
  * A continuation context is entered when:
  * - We're nested inside another binary_expression (the outer one already added indent)
- *
- * We explicitly DON'T treat if_expression as a continuation context for binary
- * expressions because the binary expression's continuation needs its own indent.
+ * - We're inside an if_expression's then/else VALUE (the if_expression adds indent)
  *
  * We stop looking at certain boundaries:
  * - declaration (top-level variable declaration)
  * - component_declaration
  * - equation / statement boundaries
  * - function_call_args (each function call is its own context)
- * - if_expression (each branch is its own context)
  */
 function isInContinuationContext(path: AstPath<ASTNode>): boolean {
   const currentNode = path.getValue();
+
+  // NOTE: We do NOT check isInsideIfExpressionValue here.
+  // Binary expressions inside if_expression then/else values should still add
+  // their own continuation indent. The if_expression's indent is for its
+  // then/else keywords, not for the values' internal structure.
 
   // Start from i=1 to skip the current node itself
   for (let i = 1; i < 15; i++) {
@@ -44,10 +109,6 @@ function isInContinuationContext(path: AstPath<ASTNode>): boolean {
     if (ancestor.type === "binary_expression" && ancestor !== currentNode) {
       return true;
     }
-
-    // NOTE: We explicitly do NOT treat if_expression conditions as continuation context
-    // Binary expressions inside if conditions should still indent their own continuations
-    // The if_expression only handles indent for then/else, not the condition's internal structure
 
     // NOTE: parenthesized_expression is NOT a continuation context
     // It doesn't add indent - inner constructs handle their own indentation
@@ -66,7 +127,6 @@ function isInContinuationContext(path: AstPath<ASTNode>): boolean {
     if (ancestor.type === "statement") break;
     if (ancestor.type === "element") break;
     if (ancestor.type === "function_call_args") break;
-    if (ancestor.type === "if_expression") break;
     // parenthesized_expression is a boundary ONLY when it's an operand of a binary_expression
     // This allows `then (if ... then X else Y)` to inherit continuation from outer then
     // But prevents `(func1() - func2()) * mLiq` inner binary from seeing outer binary
@@ -1705,6 +1765,9 @@ export const printModelica: Printer<ASTNode>["print"] = (
       // Use centralized continuation context detection
       const inContinuation = isInContinuationContext(path);
       const midLine = isMidLineIfExpression(path);
+      // Check if we're nested inside another if_expression's then/else value
+      // In that case, we need to indent our then/else clauses
+      const nestedInIfValue = isInsideIfExpressionValue(path);
 
       // Collect all parts for proper grouping and line breaking
       const conditionParts: Doc[] = [];
@@ -1759,7 +1822,9 @@ export const printModelica: Printer<ASTNode>["print"] = (
         ]);
       }
 
-      if (midLine) {
+      if (midLine || nestedInIfValue) {
+        // When mid-line (e.g., `x = if ...`) or nested inside another if's then/else,
+        // we need to indent the then/else clauses relative to the `if` keyword
         return group([
           "if ",
           ...conditionParts,

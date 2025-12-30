@@ -6,9 +6,9 @@ block IfThenElse
   final parameter Modelica.Units.SI.PressureDifference dpValCheChiWat_nominal =
     if have_chiWat
     then (if typPumChiWatPri == Buildings.Templates.Plants.HeatPumps.Types.PumpsPrimary.None
-    then dat.dpValCheHeaWat_nominal *
-      (hp.mChiWatHp_flow_nominal / max(dat.pumHeaWatPri.m_flow_nominal)) ^ 2
-    else dat.dpValCheChiWat_nominal)
+      then dat.dpValCheHeaWat_nominal *
+        (hp.mChiWatHp_flow_nominal / max(dat.pumHeaWatPri.m_flow_nominal)) ^ 2
+      else dat.dpValCheChiWat_nominal)
     else 0
     "Primary (CHW or common HW and CHW) pump check valve pressure drop at design CHW flow rate";
   final parameter Modelica.Units.SI.Temperature TChiWatRet_nominal =

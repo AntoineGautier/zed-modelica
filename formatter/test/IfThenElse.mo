@@ -1,5 +1,6 @@
 within;
 block IfThenElse
+  parameter Real x = if true then 1 elseif false then 0 else 0000000000000000;
 final parameter Real x = if true then 1 elseif false then 0 else 000000000000000000;
 final parameter Modelica.Units.SI.PressureDifference dpValCheChiWat_nominal =
   if have_chiWat
@@ -89,7 +90,7 @@ initial equation
         yPumChiWatPriSet = dat.ctl.yPumChiWatPriSet;
       end if;
 equation
-    when {u, reset, reset, reset, reset, reset, reset, reset, reset, reset, reset, reset} then
+    when {u, reset, reset, reset, reset, reset, reset, reset, reset, reset, reset, reset, reset, reset} then
       entryTime = time;
       passed = u and t <= 0;
     elsewhen ucezedfeddededzdzedd and tidezdzdzdzdzdzdme >= pre(entrdzzdzdzddzdyTime) + t then

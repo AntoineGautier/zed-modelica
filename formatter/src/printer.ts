@@ -1948,12 +1948,12 @@ export const printModelica: Printer<ASTNode>["print"] = (
         return group(["{", join([",", line], args), "}"]);
       }
 
-      return group([
-        "{",
-        indent([softline, join([",", line], args)]),
-        softline,
-        "}",
-      ]);
+      // Non-annotation arrays: delegate to array_arguments which handles fill
+      if (args.length === 0) return "{}";
+      
+      // args[0] is the formatted array_arguments - wrap with braces
+      // Braces stay attached to first/last elements, indent for continuation
+      return group(["{", indent(args[0]), "}"]);
     }
 
     case "array_arguments": {
@@ -1993,7 +1993,17 @@ export const printModelica: Printer<ASTNode>["print"] = (
         // Default: comma-separated without spaces for compact arrays
         return join(",", args);
       }
-      return join(", ", args);
+      // Non-annotation: use fill to wrap at line length
+      // Braces stay attached to first/last elements (no softline at start/end)
+      // Build fill items: [elem1, ",", line, elem2, ",", line, elem3, ...]
+      const fillItems: Doc[] = [];
+      for (let i = 0; i < args.length; i++) {
+        if (i > 0) {
+          fillItems.push(",", line);
+        }
+        fillItems.push(args[i]);
+      }
+      return fill(fillItems);
     }
 
     case "array_concatenation": {

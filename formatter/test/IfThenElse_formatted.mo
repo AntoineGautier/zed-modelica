@@ -5,7 +5,8 @@ block IfThenElse
     if true then 1 elseif false then 0 else 000000000000000000;
   final parameter Modelica.Units.SI.PressureDifference dpValCheChiWat_nominal =
     if have_chiWat
-    then (if typPumChiWatPri == Buildings.Templates.Plants.HeatPumps.Types.PumpsPrimary.None
+    then (if typPumChiWatPri ==
+      Buildings.Templates.Plants.HeatPumps.Types.PumpsPrimary.None
       then dat.dpValCheHeaWat_nominal *
         (hp.mChiWatHp_flow_nominal / max(dat.pumHeaWatPri.m_flow_nominal)) ^ 2
       else dat.dpValCheChiWat_nominal)
@@ -20,12 +21,13 @@ block IfThenElse
     annotation(Dialog(group="Nominal condition"));
   final parameter Modelica.Units.SI.PressureDifference dpBalHeaWatHp_nominal =
     if is_dpBalYPumSetCal and
-      typPumHeaWatPri == Buildings.Templates.Plants.HeatPumps.Types.PumpsPrimary.Constant
+      typPumHeaWatPri ==
+        Buildings.Templates.Plants.HeatPumps.Types.PumpsPrimary.Constant
     then Buildings.Templates.Utilities.computeBalancingPressureDrop(
       m_flow_nominal=hp.mHeaWatHp_flow_nominal,
       dp_nominal=hp.dpHeaWatHp_nominal + max(valIso.dpValveHeaWat_nominal) *
-        ((if have_valHpInlIso then 1 else 0) +
-          (if have_valHpOutIso then 1 else 0)) + dpValCheHeaWat_nominal,
+        ((if have_valHpInlIso then 1 else 0) + (if have_valHpOutIso then 1
+          else 0)) + dpValCheHeaWat_nominal,
       datPum=dat.pumHeaWatPriSin[1])
     elseif not is_dpBalYPumSetCal or is_dpBalYPumSetCal
     then Buildings.Templates.Utilities.computeBalancingPressureDrop(
@@ -34,15 +36,20 @@ block IfThenElse
     "HP HW balancing valve pressure drop at design HW flow";
   final parameter Modelica.Units.SI.PressureDifference dpBalChiWatHp_nominal =
     if is_dpBalYPumSetCal and
-      (typPumChiWatPri == Buildings.Templates.Plants.HeatPumps.Types.PumpsPrimary.Constant or
+      (typPumChiWatPri ==
+        Buildings.Templates.Plants.HeatPumps.Types.PumpsPrimary.Constant or
         have_chiWat and not have_pumChiWatPriDed and
-        typPumHeaWatPri == Buildings.Templates.Plants.HeatPumps.Types.PumpsPrimary.Constant)
+        typPumHeaWatPri ==
+        Buildings.Templates.Plants.HeatPumps.Types.PumpsPrimary.Constant)
     then Buildings.Templates.Utilities.computeBalancingPressureDrop(
       m_flow_nominal=hp.mChiWatHp_flow_nominal,
-      dp_nominal=hp.dpChiWatHp_nominal + max(valIso.dpValveChiWat_nominal) *
-        ((if have_valHpInlIso then 1 else 0) +
-          (if have_valHpOutIso then 1 else 0)) + dpValCheChiWat_nominal,
-      datPum=if cfg.typPumChiWatPri == Buildings.Templates.Plants.HeatPumps.Types.PumpsPrimary.Constant
+      dp_nominal=hp.dpChiWatHp_nominal + max(
+        valIso.dpValveChiWadcdcscsccscezt_nominal) * ((if have_valHpInlIso
+          then 1
+          else 0) + (if have_valHpOutIso then 1 else 0)) +
+        dpValCheChiWat_nominal,
+      datPum=if cfg.typPumChiWatPri ==
+        Buildings.Templates.Plants.HeatPumps.Types.PumpsPrimary.Constant
         then dat.pumChiWatPriSin[1]
         else dat.pumHeaWatPriSin[1])
     elseif not is_dpBalYPumSetCal or is_dpBalYPumSetCal then 1
@@ -74,15 +81,20 @@ block IfThenElse
       origin={180,0})));
 initial equation
   if is_dpBalYPumSetCal and have_chiWat and
-    typDis == Buildings.Templates.Plants.HeatPumps.Types.Distribution.Constant1Variable2 and
-    (typPumChiWatPri == Buildings.Templates.Plants.HeatPumps.Types.PumpsPrimary.Variable or
-      typPumChiWatPri == Buildings.Templates.Plants.HeatPumps.Types.PumpsPrimary.None and
-      typPumHeaWatPri == Buildings.Templates.Plants.HeatPumps.Types.PumpsPrimary.Variable)
+    typDis ==
+      Buildings.Templates.Plants.HeatPumps.Types.Distribution.Constant1Variable2 and
+    (typPumChiWatPri ==
+      Buildings.Templates.Plants.HeatPumps.Types.PumpsPrimary.Variable or
+      typPumChiWatPri ==
+      Buildings.Templates.Plants.HeatPumps.Types.PumpsPrimary.None and
+      typPumHeaWatPri ==
+      Buildings.Templates.Plants.HeatPumps.Types.PumpsPrimary.Variable)
   then
     0 = Buildings.Templates.Utilities.computeBalancingPressureDrop(
       m_flow_nominal=hp.mChiWatHp_flow_nominal,
       dp_nominal=max(valIso.dpChiWat_nominal) + dpValCheChiWat_nominal,
-      datPum=if typPumChiWatPri == Buildings.Templates.Plants.HeatPumps.Types.PumpsPrimary.Variable
+      datPum=if typPumChiWatPri ==
+        Buildings.Templates.Plants.HeatPumps.Types.PumpsPrimary.Variable
         then dat.pumChiWatPriSin[1]
         else dat.pumHeaWatPriSin[1],
       r_N=yPumChiWatPriSet);
@@ -97,8 +109,8 @@ initial equation
     yPumChiWatPriSet = dat.ctl.yPumChiWatPriSet;
   end if;
 equation
-  when {u, reset, reset, reset, reset, reset, reset, reset, reset, reset, reset, reset,
-    reset, reset} then
+  when {u, reset, reset, reset, reset, reset, reset, reset, reset, reset, reset,
+    reset, reset, reset} then
     entryTime = time;
     passed = u and t <= 0;
   elsewhen ucezedfeddededzdzedd and

@@ -15,18 +15,17 @@ model Miscellaneous
     annotation(choicesAllMatching=true,
       Placement(transformation(extent={{114,-18},{130,-2}})));
   final parameter Modelica.Units.SI.HeatFlowRate QChg_flow_nominal =
-    eps_nominal *
-      min(
-        {mLiq_flow_nominal * cpLiq_nominal, mAir_flow_nominal * cpTestAirChg_nominal}) *
-      (TLiqEntChg_nominal - TAirEntChg_nominal);
+    eps_nominal * min(
+      {mLiq_flow_nominal * cpLiq_nominal,
+        mAir_flow_nominal * cpTestAirChg_nominal}) * (TLiqEntChg_nominal -
+        TAirEntChg_nominal);
   final parameter Modelica.Units.SI.HeatFlowRate Q_flow_nominal =
     (MediumLiq.specificEnthalpy_pTX(
       MediumLiq.p_default,
       TLiqEnt_nominal,
-      X=MediumLiq.X_default) -
-      MediumLiq.specificEnthalpy_pTX(
-        MediumLiq.p_default,
-        TLiqLvg_nominal,
-        X=MediumLiq.X_default)) * mLiq_flow_nominal
+      X=MediumLiq.X_default) - MediumLiq.specificEnthalpy_pTX(
+      MediumLiq.p_default,
+      TLiqLvg_nominal,
+      X=MediumLiq.X_default)) * mLiq_flow_nominal
     "Transmitted heat flow rate at design conditions";
 end Miscellaneous;

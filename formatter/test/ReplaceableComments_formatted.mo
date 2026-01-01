@@ -12,12 +12,14 @@ redeclare final package MediumSou = MediumAir
   replaceable package MediumSou = Buildings.Media.Water
     constrainedby Modelica.Media.Interfaces.PartialMedium
     "Source-side medium"
-    annotation(Dialog(enable=typ == Buildings.Templates.Components.Types.HeatPump.WaterToWater),
+    annotation(Dialog(enable=typ ==
+      Buildings.Templates.Components.Types.HeatPump.WaterToWater),
       __ctrlFlow(enable=false));
   replaceable package MediumAir = Buildings.Media.Air
     constrainedby Modelica.Media.Interfaces.PartialMedium
     "Air medium"
-    annotation(Dialog(enable=typ == Buildings.Templates.Components.Types.HeatPump.AirToWater),
+    annotation(Dialog(enable=typ ==
+      Buildings.Templates.Components.Types.HeatPump.AirToWater),
       __ctrlFlow(enable=false));
   // The current implementation only supports plants that provide HHW.
 end ReplaceableComments;

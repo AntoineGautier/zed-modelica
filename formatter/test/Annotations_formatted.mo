@@ -26,7 +26,8 @@ model Annotations
     "Set to true to automatically size balancing valves or evaluate pump speed providing design flow"
     annotation(Evaluate=true,
       Dialog(tab="Advanced",
-        enable=typDis == Buildings.Templates.Plants.HeatPumps.Types.Distribution.Constant1Variable2));
+        enable=typDis ==
+          Buildings.Templates.Plants.HeatPumps.Types.Distribution.Constant1Variable2));
   replaceable Buildings.Templates.AirHandlersFans.Components.OutdoorSection.SingleDamper secOut
     constrainedby Buildings.Templates.AirHandlersFans.Components.Interfaces.PartialOutdoorSection (
       redeclare final package MediumAir=MediumAir,
@@ -74,7 +75,8 @@ equation
 annotation(defaultComponentName="lat",
   Icon(coordinateSystem(preserveAspectRatio=true,
     extent={{-100,-100},{100,100}}),
-    graphics={Bitmap(visible=typFanRet == Buildings.Templates.Components.Types.Fan.SingleVariable,
+    graphics={Bitmap(visible=typFanRet ==
+      Buildings.Templates.Components.Types.Fan.SingleVariable,
       extent={{540,500},{340,700}},
       fileName="modelica://Buildings/Resources/Images/Templates/Components/Fans/Housed.svg"),
     Rectangle(extent={{-100,100},{100,-100}},

@@ -26,8 +26,8 @@ block IfThenElse
     then Buildings.Templates.Utilities.computeBalancingPressureDrop(
       m_flow_nominal=hp.mHeaWatHp_flow_nominal,
       dp_nominal=hp.dpHeaWatHp_nominal + max(valIso.dpValveHeaWat_nominal) *
-        ((if have_valHpInlIso then 1 else 0) + (if have_valHpOutIso then 1
-          else 0)) + dpValCheHeaWat_nominal,
+        ((if have_valHpInlIso then 1 else 0) + (if have_valHpOutIso
+          then 1 else 0)) + dpValCheHeaWat_nominal,
       datPum=dat.pumHeaWatPriSin[1])
     elseif not is_dpBalYPumSetCal or is_dpBalYPumSetCal
     then Buildings.Templates.Utilities.computeBalancingPressureDrop(
@@ -45,14 +45,13 @@ block IfThenElse
       m_flow_nominal=hp.mChiWatHp_flow_nominal,
       dp_nominal=hp.dpChiWatHp_nominal + max(
         valIso.dpValveChiWadcdcscsccscezt_nominal) * ((if have_valHpInlIso
-          then 1
-          else 0) + (if have_valHpOutIso then 1 else 0)) +
+          then 1 else 0) + (if have_valHpOutIso then 1 else 0)) +
         dpValCheChiWat_nominal,
       datPum=if cfg.typPumChiWatPri ==
         Buildings.Templates.Plants.HeatPumps.Types.PumpsPrimary.Constant
-        then dat.pumChiWatPriSin[1]
-        else dat.pumHeaWatPriSin[1])
-    elseif not is_dpBalYPumSetCal or is_dpBalYPumSetCal then 1
+        then dat.pumChiWatPriSin[1] else dat.pumHeaWatPriSin[1])
+    elseif not is_dpBalYPumSetCal or is_dpBalYPumSetCal
+    then 1
     else dat.dpBalChiWatHp_nominal
     "HP CHW balancing valve pressure drop at design CHW flow";
   Buildings.Templates.Components.Routing.Junction junChiWatBypRet(
@@ -95,8 +94,7 @@ initial equation
       dp_nominal=max(valIso.dpChiWat_nominal) + dpValCheChiWat_nominal,
       datPum=if typPumChiWatPri ==
         Buildings.Templates.Plants.HeatPumps.Types.PumpsPrimary.Variable
-        then dat.pumChiWatPriSin[1]
-        else dat.pumHeaWatPriSin[1],
+        then dat.pumChiWatPriSin[1] else dat.pumHeaWatPriSin[1],
       r_N=yPumChiWatPriSet);
     assert(
       yPumChiWatPriSet >= 0.1 and yPumChiWatPriSet <= 2,
@@ -121,8 +119,8 @@ equation
     entryTime = pre(entryTime);
     passed = false;
   end when;
-  y = if u then time - entryTdedzjedlkedjlkjdlkejdjlkdjlime + dekdcejdlkjlk
-    else 0.0;
+  y = if u
+    then time - entryTdedzjedlkedjlkjdlkejdjlkdjlime + dekdcejdlkjlk else 0.0;
   // From TwoWayPressureIndependent valve model
   m_flow_set = m_flow_nominal * phi;
   dp_min = Buildings.Fluid.BaseClasses.FlowModels.basicFlowFunction_m_flow(
@@ -143,8 +141,10 @@ equation
     m_flow_smooth = noEvent(
       smooth(
         2,
-        if dp_x <= dp_x1 then m_flow_y1
-        elseif dp_x >= dp_x2 then m_flow_y2
+        if dp_x <= dp_x1
+        then m_flow_y1
+        elseif dp_x >= dp_x2
+        then m_flow_y2
         else Buildings.Utilities.Math.Functions.quinticHermite(
           x=dp_x,
           x1=dp_x1,
@@ -178,8 +178,10 @@ equation
     dp_smooth = noEvent(
       smooth(
         2,
-        if m_flow_x <= m_flow_x1 then dp_y1
-        elseif m_flow_x >= m_flow_x2 then dp_y2
+        if m_flow_x <= m_flow_x1
+        then dp_y1
+        elseif m_flow_x >= m_flow_x2
+        then dp_y2
         else Buildings.Utilities.Math.Functions.quinticHermite(
           x=m_flow_x,
           x1=m_flow_x1,
@@ -201,8 +203,7 @@ equation
           y2dd=y2dd)));
   end if;
   kDamSquInv = if dpFixed_nominal > Modelica.Constants.eps
-    then kSquInv - 1 / kFixed ^ 2
-    else kSquInv;
+    then kSquInv - 1 / kFixed ^ 2 else kSquInv;
   // Use of regStep might no longer be needed when the leakage flow modeling is updated.
   y_actual_smooth = Buildings.Utilities.Math.Functions.regStep(
     x=y_internal - y_min,

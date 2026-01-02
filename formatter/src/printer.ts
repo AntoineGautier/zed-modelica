@@ -1780,25 +1780,16 @@ export const printModelica: Printer<ASTNode>["print"] = (
         childIdx++;
       }
 
-      // Build then clause: "then " followed by then-value
-      // Add indent for the value so continuation lines are indented
-      const thenClause: Doc = ["then ", indent(thenExprDoc)];
-
-      // Build else clause
-      // Add indent for the value so continuation lines are indented
-      const elseClause: Doc = ["else ", indent(elseExprDoc)];
-
-      // Single formatting pattern for all cases:
-      // group([keyword, condition, line, thenClause]) - the inner group decides
-      // if "if COND then VALUE" fits. If not, line becomes newline before "then".
-      // The then-value's internal structure (e.g., function call) handles its own breaks.
+      // Try to keep then-else together on one line using conditionalGroup
+      // Option 1: Everything inline
+      // Option 2: Break with proper indentation (then/else at same level as if)
 
       if (inContinuation) {
         return group([
-          group(["if ", ...conditionParts, line, thenClause]),
-          ...elseIfParts,
+          "if ",
+          ...conditionParts,
           line,
-          elseClause,
+          group(["then ", indent(thenExprDoc), ...elseIfParts, line, "else ", indent(elseExprDoc)]),
         ]);
       }
 
@@ -1808,16 +1799,19 @@ export const printModelica: Printer<ASTNode>["print"] = (
         return group([
           "if ",
           ...conditionParts,
-          indent([group([line, thenClause]), ...elseIfParts, line, elseClause]),
+          indent([
+            line,
+            group(["then ", indent(thenExprDoc), ...elseIfParts, line, "else ", indent(elseExprDoc)]),
+          ]),
         ]);
       }
 
       // Top-level RHS
       return group([
-        group(["if ", ...conditionParts, line, thenClause]),
-        ...elseIfParts,
+        "if ",
+        ...conditionParts,
         line,
-        elseClause,
+        group(["then ", indent(thenExprDoc), ...elseIfParts, line, "else ", indent(elseExprDoc)]),
       ]);
     }
 
@@ -1835,14 +1829,9 @@ export const printModelica: Printer<ASTNode>["print"] = (
         }
       }
 
-      // EXACT same pattern as if_expression inner group:
-      // group([keyword, condition, line, thenClause])
-      // This group decides if "elseif COND then VALUE" fits.
-      // If not, line becomes newline before "then".
-      // Note: this gets composed into the parent if_expression with `line` before it,
-      // just like the if's inner group has elseIfParts after it.
-      const thenClause: Doc = ["then ", thenExprDoc];
-      return group(["elseif ", ...conditionParts, line, thenClause]);
+      // Return just "elseif COND" as a group, then add "then VALUE" separately
+      // This matches the if_expression structure where "then" is outside the condition group
+      return [group(["elseif ", ...conditionParts]), line, "then ", thenExprDoc];
     }
 
     case "simple_expression":

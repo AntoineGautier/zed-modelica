@@ -39,7 +39,7 @@ final parameter Modelica.Units.SI.PressureDifference dpBalChiWatHp_nominal =
         (if have_valHpOutIso then 1 else 0)) + dpValCheChiWat_nominal,
     datPum=if cfg.typPumChiWatPri == Buildings.Templates.Plants.HeatPumps.Types.PumpsPrimary.Constant
       then dat.pumChiWatPriSin[1] else dat.pumHeaWatPriSin[1])
-      elseif not is_dpBalYPumSetCal or is_dpBalYPumSetCal
+      elseif not is_dpBalYPumSetCal or is_dpBalYPumSetCal or is_dpBalYPumSetCal or is_dpBalYPumSetCal
       then 1
   else dat.dpBalChiWatHp_nominal
   "HP CHW balancing valve pressure drop at design CHW flow";

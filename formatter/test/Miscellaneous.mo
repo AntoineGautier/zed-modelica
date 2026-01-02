@@ -17,7 +17,12 @@ final model RefrigerantCycleChillerCooling=Buildings.Fluid.Chillers.ModularRever
     * (TLiqEntChg_nominal - TAirEntChg_nominal);
     final parameter Modelica.Units.SI.HeatFlowRate Q_flow_nominal=
      (MediumLiq.specificEnthalpy_pTX(MediumLiq.p_default, TLiqEnt_nominal, X=MediumLiq.X_default)-
-      MediumLiq.specificEnthalpy_pTX(MediumLiq.p_default, TLiqLvg_nominal, X=MediumLiq.X_default))*
-      mLiq_flow_nominal
+      MediumLiq.specificEnthalpy_pTX(MediumLiq.p_default, TLiqLvg_nominal, X=MediumLiq.X_default)
+      +  mLiq_flow_nominal - MediumLiq.specificEnthalpy_pTX(
+      MediumLiq.p_default, TLiqLvg_nominal, X=MediumLiq.X_default))*
+      mLiq_flow_nominal - MediumLiq.specificEnthalpy_pTX(
+      MediumLiq.p_default,
+      TLiqLvg_nominal,
+      X=MediumLiq.X_default)
        "Transmitted heat flow rate at design conditions";
 end Miscellaneous;

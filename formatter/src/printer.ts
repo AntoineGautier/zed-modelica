@@ -8,7 +8,16 @@ import { doc } from "prettier";
 import type { ASTNode } from "./parser.js";
 
 const { builders } = doc;
-const { group, indent, line, softline, hardline, join, fill, conditionalGroup } = builders;
+const {
+  group,
+  indent,
+  line,
+  softline,
+  hardline,
+  join,
+  fill,
+  conditionalGroup,
+} = builders;
 
 // ===========================================
 // Centralized Continuation Line Handling
@@ -182,7 +191,10 @@ function formatAssignmentRhs(rhsDoc: Doc): Doc {
  * @param inChoices - Whether we're inside a choices annotation (no extra indent)
  * @returns A grouped document with proper assignment formatting
  */
-function formatAssignmentRhsCompact(rhsDoc: Doc, inChoices: boolean = false): Doc {
+function formatAssignmentRhsCompact(
+  rhsDoc: Doc,
+  inChoices: boolean = false,
+): Doc {
   if (inChoices) {
     // Inside choices: no extra indent, just allow line break
     return group(["=", [softline, rhsDoc]]);
@@ -746,10 +758,20 @@ export const printModelica: Printer<ASTNode>["print"] = (
           rhsParts.push(path.call(print, "children", i));
         } else if (child.type === "description_string") {
           // Description string on new line with indent (same as component_declaration)
-          trailingParts.push(formatTrailingDescription(path.call(print, "children", i), inChoices));
+          trailingParts.push(
+            formatTrailingDescription(
+              path.call(print, "children", i),
+              inChoices,
+            ),
+          );
         } else if (child.type === "annotation_clause") {
           // Annotation clause on new line with indent (same as component_declaration)
-          trailingParts.push(formatTrailingDescription(path.call(print, "children", i), inChoices));
+          trailingParts.push(
+            formatTrailingDescription(
+              path.call(print, "children", i),
+              inChoices,
+            ),
+          );
         }
       }
 
@@ -1005,13 +1027,17 @@ export const printModelica: Printer<ASTNode>["print"] = (
           parts.push(indent([line, "if ", path.call(print, "children", i)]));
         } else if (child.type === "description_string") {
           // Break line before description string (use shared helper)
-          parts.push(formatTrailingDescription(
-            path.call(print, "children", i),
-            isInsideChoicesAnnotation(path)
-          ));
+          parts.push(
+            formatTrailingDescription(
+              path.call(print, "children", i),
+              isInsideChoicesAnnotation(path),
+            ),
+          );
         } else if (child.type === "annotation_clause") {
           // Break line before annotation (use shared helper)
-          parts.push(formatTrailingDescription(path.call(print, "children", i)));
+          parts.push(
+            formatTrailingDescription(path.call(print, "children", i)),
+          );
         } else if (child.type === "comment") {
           parts.push(" ", path.call(print, "children", i));
         }
@@ -1281,7 +1307,9 @@ export const printModelica: Printer<ASTNode>["print"] = (
 
       // Check if this is a choice=Value "description" element inside choices annotation
       const nameChild = node.children.find((c) => c.type === "name");
-      const hasDescriptionString = node.children.some((c) => c.type === "description_string");
+      const hasDescriptionString = node.children.some(
+        (c) => c.type === "description_string",
+      );
       const isChoiceAssignment =
         nameChild?.text === "choice" &&
         node.children.some((c) => c.type === "modification") &&
@@ -1517,14 +1545,7 @@ export const printModelica: Printer<ASTNode>["print"] = (
           const condExpr = path.call(print, "children", i);
           // Structure: "if " + condition on same line, continuations indented,
           // "then" either on same line (if fits) or new line (at if's level)
-          parts.push(
-            group([
-              "if ",
-              indent(condExpr),
-              line,
-              "then",
-            ]),
-          );
+          parts.push(group(["if ", indent(condExpr), line, "then"]));
         } else if (
           child.type === "equation_list" ||
           child.type === "statement_list"
@@ -1566,14 +1587,7 @@ export const printModelica: Printer<ASTNode>["print"] = (
         if (child.type === "expression") {
           // Same pattern as if_statement for condition + then
           const condExpr = path.call(print, "children", i);
-          parts.push(
-            group([
-              "elseif ",
-              indent(condExpr),
-              line,
-              "then",
-            ]),
-          );
+          parts.push(group(["elseif ", indent(condExpr), line, "then"]));
         } else if (
           child.type === "equation_list" ||
           child.type === "statement_list"
@@ -1780,25 +1794,23 @@ export const printModelica: Printer<ASTNode>["print"] = (
         childIdx++;
       }
 
-      // Build then clause: "then " followed by then-value
-      // Add indent for the value so continuation lines are indented
-      const thenClause: Doc = ["then ", indent(thenExprDoc)];
-
-      // Build else clause
-      // Add indent for the value so continuation lines are indented
-      const elseClause: Doc = ["else ", indent(elseExprDoc)];
-
-      // Single formatting pattern for all cases:
-      // group([keyword, condition, line, thenClause]) - the inner group decides
-      // if "if COND then VALUE" fits. If not, line becomes newline before "then".
-      // The then-value's internal structure (e.g., function call) handles its own breaks.
+      // Try to keep then-else together on one line using conditionalGroup
+      // Option 1: Everything inline
+      // Option 2: Break with proper indentation (then/else at same level as if)
 
       if (inContinuation) {
         return group([
-          group(["if ", ...conditionParts, line, thenClause]),
-          ...elseIfParts,
+          "if ",
+          ...conditionParts,
           line,
-          elseClause,
+          group([
+            "then ",
+            indent(thenExprDoc),
+            ...elseIfParts,
+            line,
+            "else ",
+            indent(elseExprDoc),
+          ]),
         ]);
       }
 
@@ -1808,16 +1820,33 @@ export const printModelica: Printer<ASTNode>["print"] = (
         return group([
           "if ",
           ...conditionParts,
-          indent([group([line, thenClause]), ...elseIfParts, line, elseClause]),
+          indent([
+            line,
+            group([
+              "then ",
+              indent(thenExprDoc),
+              ...elseIfParts,
+              line,
+              "else ",
+              indent(elseExprDoc),
+            ]),
+          ]),
         ]);
       }
 
       // Top-level RHS
       return group([
-        group(["if ", ...conditionParts, line, thenClause]),
-        ...elseIfParts,
+        "if ",
+        ...conditionParts,
         line,
-        elseClause,
+        group([
+          "then ",
+          indent(thenExprDoc),
+          ...elseIfParts,
+          line,
+          "else ",
+          indent(elseExprDoc),
+        ]),
       ]);
     }
 
@@ -1835,14 +1864,14 @@ export const printModelica: Printer<ASTNode>["print"] = (
         }
       }
 
-      // EXACT same pattern as if_expression inner group:
-      // group([keyword, condition, line, thenClause])
-      // This group decides if "elseif COND then VALUE" fits.
-      // If not, line becomes newline before "then".
-      // Note: this gets composed into the parent if_expression with `line` before it,
-      // just like the if's inner group has elseIfParts after it.
-      const thenClause: Doc = ["then ", thenExprDoc];
-      return group(["elseif ", ...conditionParts, line, thenClause]);
+      // Return just "elseif COND" as a group, then add "then VALUE" separately
+      // This matches the if_expression structure where "then" is outside the condition group
+      return [
+        group(["elseif ", ...conditionParts]),
+        line,
+        "then ",
+        thenExprDoc,
+      ];
     }
 
     case "simple_expression":
@@ -2088,7 +2117,7 @@ export const printModelica: Printer<ASTNode>["print"] = (
           // - Huggable operands (function calls, parens, arrays) handle their own indentation
           // - Non-huggable operands need outer indent wrapper
           const parts: Doc[] = [operands[0]];
-          
+
           for (let i = 0; i < ops.length; i++) {
             const operand = operands[i + 1];
             const operandNode = operandNodes[i + 1];
@@ -2105,9 +2134,10 @@ export const printModelica: Printer<ASTNode>["print"] = (
                 : [" ", ops[i], indent(group([line, operand]))];
               // For option 2: parenthesized_expression needs indent wrapper since shouldBreak
               // alone doesn't trigger the paren's internal indent (no line breaks inside simple content)
-              const option2Operand = operandNode.type === "parenthesized_expression"
-                ? indent(group(operand, { shouldBreak: true }))
-                : group(operand, { shouldBreak: true });
+              const option2Operand =
+                operandNode.type === "parenthesized_expression"
+                  ? indent(group(operand, { shouldBreak: true }))
+                  : group(operand, { shouldBreak: true });
               parts.push(
                 conditionalGroup([
                   // Option 1: all inline
@@ -2405,10 +2435,6 @@ export const printModelica: Printer<ASTNode>["print"] = (
       const args = path.map(print, "children");
       const inAnnotation = isInsideAnnotation(path);
 
-
-
-
-
       if (inAnnotation) {
         // Get the parent to check what kind of function this is
         const parent = path.getParentNode();
@@ -2521,10 +2547,10 @@ export const printModelica: Printer<ASTNode>["print"] = (
       }
 
       if (allArgs.length === 0) return "()";
-      
+
       // Check if we're in a continuation context - if so, skip indent (parent already provides it)
       const inContinuation = isInContinuationContext(path);
-      
+
       if (allArgs.length === 1) {
         // Single-argument call - allow breaking if line exceeds limit
         // Use softline after "(" so arg can go on new line if needed
@@ -2542,11 +2568,7 @@ export const printModelica: Printer<ASTNode>["print"] = (
       if (inContinuation) {
         return group(["(", softline, join([",", line], allArgs), ")"]);
       }
-      return group([
-        "(",
-        indent([softline, join([",", line], allArgs)]),
-        ")",
-      ]);
+      return group(["(", indent([softline, join([",", line], allArgs)]), ")"]);
     }
 
     case "function_arguments": {

@@ -17,7 +17,7 @@ model ParenEdgeCases
   parameter Real test3 =
     if cond1
     then ((if cond2 == Value.A then x else y) + (if cond3 == Value.B
-        then a else b))
+      then a else b))
     else default;
   // Edge case 4: If in else branch with parenthesized nested if
   parameter Real test4 =
@@ -29,7 +29,7 @@ model ParenEdgeCases
   parameter Real test5 =
     if enabled
     then coefficient * (if mode == System.Config.Mode.Advanced
-        then advanced_multiplier else basic_multiplier)
+      then advanced_multiplier else basic_multiplier)
     else zero;
   // Edge case 6: Function call with parenthesized if argument
   parameter Real test6 =

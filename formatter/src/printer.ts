@@ -97,6 +97,27 @@ function isInsideIfExpressionValue(path: AstPath<ASTNode>): boolean {
 }
 
 /**
+ * Checks if a parenthesized_expression node directly contains an if_expression as its core content.
+ * Structure: parenthesized_expression -> output_expression_list -> expression -> if_expression
+ * 
+ * This is used to avoid double indentation when the if_expression already handles its own
+ * then/else branch indentation.
+ */
+function parenContainsIfExpression(node: ASTNode): boolean {
+  if (node.type !== "parenthesized_expression") return false;
+  
+  // Navigate through the wrapper layers
+  const outputList = node.children.find(c => c.type === "output_expression_list");
+  if (!outputList) return false;
+  
+  const expr = outputList.children.find(c => c.type === "expression");
+  if (!expr) return false;
+  
+  // Check if the expression directly contains an if_expression
+  return expr.children.some(c => c.type === "if_expression");
+}
+
+/**
  * Determines if the current path is inside a context that has already
  * added continuation indentation. This prevents cumulative/stacking indents.
  *
@@ -2167,8 +2188,11 @@ export const printModelica: Printer<ASTNode>["print"] = (
                 : [" ", ops[i], indent(group([line, operand]))];
               // For option 2: parenthesized_expression needs indent wrapper since shouldBreak
               // alone doesn't trigger the paren's internal indent (no line breaks inside simple content)
+              // EXCEPT when the paren contains an if_expression AND is nested inside another if's then/else value,
+              // which would cause double indentation
               const option2Operand =
-                operandNode.type === "parenthesized_expression"
+                operandNode.type === "parenthesized_expression" && 
+                !(parenContainsIfExpression(operandNode) && isInsideIfExpressionValue(path))
                   ? indent(group(operand, { shouldBreak: true }))
                   : group(operand, { shouldBreak: true });
               parts.push(

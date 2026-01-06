@@ -13,7 +13,8 @@ package Types
     Cv "Cv (US) flow coefficient",
     Av "Av (metric) flow coefficient")
     "Enumeration to define the choice of valve flow coefficient"
-    annotation(Documentation(info="<html>
+    annotation(Documentation(
+      info="<html>
 <p>
 Enumeration to define the choice of valve flow coefficient (to be
 selected via choices menu):
@@ -50,7 +51,8 @@ Users Guide</a>.
     CrossFlowStream1UnmixedStream2Mixed "Cross flow, stream 1 unmixed, stream 2 mixed",
     ConstantTemperaturePhaseChange "Constant temperature phase change in one stream")
     "Enumeration for heat exchanger construction"
-    annotation(Documentation(info="<html>
+    annotation(Documentation(
+      info="<html>
 <p>
  Enumeration that defines the heat exchanger construction.
 </p>
@@ -115,7 +117,8 @@ implementation.
     CrossFlowCMinUnmixedCMaxMixed "Cross flow, CMin unmixed, CMax mixed",
     ConstantTemperaturePhaseChange "Constant temperature phase change in one stream")
     "Enumeration for heat exchanger flow configuration"
-    annotation(Documentation(info="<html>
+    annotation(Documentation(
+      info="<html>
 <p>
  Enumeration to define the heat exchanger flow regime.
 </p>
@@ -168,7 +171,8 @@ implementation.
     Stages "Use integer input to select stage",
     Continuous "Use continuous, real input")
     "Input options for movers"
-    annotation(Documentation(info="<html>
+    annotation(Documentation(
+      info="<html>
 <p>
 This type allows defining which type of input should be used for
 movers. This can either be
@@ -196,7 +200,8 @@ First implementation.
 </ul>
 </html>"));
 annotation(preferredView="info",
-  Documentation(info="<html>
+  Documentation(
+    info="<html>
 <p>
 This package contains type definitions.
 </p>

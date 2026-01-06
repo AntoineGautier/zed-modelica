@@ -58,7 +58,8 @@ annotation(defaultComponentName="lat",
     Text(extent={{-150,150},{150,110}},
       textColor={0,0,255},
       textString="%name")}),
-  Documentation(info="<html>
+  Documentation(
+    info="<html>
 <p>
 Block that generates a <code>true</code> output when the latch input
 <code>u</code>

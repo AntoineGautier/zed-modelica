@@ -28,7 +28,8 @@ model AirToWater
     start=1,
     final unit="1")
     "Primary pump speed providing design heat pump flow in heating mode"
-    annotation(Dialog(group="Information provided by testing, adjusting, and balancing contractor"));
+    annotation(Dialog(
+      group="Information provided by testing, adjusting, and balancing contractor"));
   final parameter Real yPumChiWatPriSet(
     final fixed=false,
     final max=2,
@@ -36,7 +37,8 @@ model AirToWater
     start=1,
     final unit="1")
     "Primary pump speed providing design heat pump flow in cooling mode"
-    annotation(Dialog(group="Information provided by testing, adjusting, and balancing contractor"));
+    annotation(Dialog(
+      group="Information provided by testing, adjusting, and balancing contractor"));
   // Heat pumps, dedicated primary pumps and isolation valves
   // The handling of HP pressure drop is accounted for within the isolation valve component.
   Components.PumpsPrimaryDedicated pumPri(
@@ -849,7 +851,8 @@ equation
       pattern=LinePattern.Dash,
       visible=have_hrc));
   connect(hrc.port_b1, junHeaWatHrcLvg.port_3)
-    annotation(Line(points={{500,-160},{440,-160},{440,-200},{380,-200},{380,-350}},
+    annotation(Line(
+      points={{500,-160},{440,-160},{440,-200},{380,-200},{380,-350}},
       color={0,0,0},
       thickness=0.5,
       visible=have_hrc));
@@ -937,7 +940,8 @@ equation
       thickness=0.5,
       pattern=LinePattern.Dash));
 annotation(defaultComponentName="pla",
-  Documentation(info="<html>
+  Documentation(
+    info="<html>
 <h4>Description</h4>
 <p>
 This template represents an air-to-water heat

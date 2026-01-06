@@ -1205,7 +1205,7 @@ export const printModelica: Printer<ASTNode>["print"] = (
           }
 
           if (elementArgs.length === 1) {
-            // Single arg: keep on same line if short
+            // Single arg: keep on same line, but content can break internally
             return group(["(", elementArgs[0], ")"]);
           }
 
@@ -1288,10 +1288,14 @@ export const printModelica: Printer<ASTNode>["print"] = (
               );
             }
             if (elementArgs.length === 1) {
-              return ["(", elementArgs[0], ")"];
+              // Try inline first, break only if doesn't fit
+              return conditionalGroup([
+                ["(", elementArgs[0], ")"],
+                ["(", indent([softline, elementArgs[0], ")"])]
+              ]);
             }
-            // First arg on same line, rest indented on new lines, closing paren on same line as last
-            return [
+            // Multiple args: try first inline, break only if doesn't fit
+            const inlineFirst = [
               "(",
               elementArgs[0],
               ",",
@@ -1301,6 +1305,18 @@ export const printModelica: Printer<ASTNode>["print"] = (
                 ")",
               ]),
             ];
+            const breakFirst = [
+              "(",
+              indent([
+                softline,
+                elementArgs[0],
+                ",",
+                hardline,
+                join([",", hardline], elementArgs.slice(1)),
+                ")",
+              ]),
+            ];
+            return conditionalGroup([inlineFirst, breakFirst]);
           }
 
           const args = path.map(print, "children");
@@ -1399,6 +1415,8 @@ export const printModelica: Printer<ASTNode>["print"] = (
         return group(parts);
       }
 
+      const inAnnotation = isInsideAnnotation(path);
+      
       for (let i = 0; i < node.children.length; i++) {
         const child = node.children[i];
         if (child.type === "name") {
@@ -1406,10 +1424,15 @@ export const printModelica: Printer<ASTNode>["print"] = (
         } else if (child.type === "modification") {
           parts.push(path.call(print, "children", i));
         } else if (child.type === "description_string") {
-          parts.push(" ", path.call(print, "children", i));
+          // In annotations, break description_string to new line with extra indent
+          if (inAnnotation) {
+            parts.push(" ", indent([line, path.call(print, "children", i)]));
+          } else {
+            parts.push(" ", path.call(print, "children", i));
+          }
         }
       }
-      return parts;
+      return inAnnotation ? group(parts) : parts;
     }
 
     case "element_replaceable":

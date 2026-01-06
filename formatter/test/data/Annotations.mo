@@ -72,7 +72,10 @@ equation
       thickness=0.5,
       visible=have_chiWat,
       pattern=LinePattern.Dash));
-annotation(defaultComponentName="lat",
+annotation(__Dymola_Commands(
+  file="modelica://Buildings/Resources/Scripts/Dymola/Templates/Plants/Controls/Enabling/Validation/Enable.mos"
+    "Simulate and plot"),
+  defaultComponentName="lat",
   Icon(coordinateSystem(preserveAspectRatio=true,
     extent={{-100,-100},{100,100}}),
     graphics={Bitmap(visible=typFanRet ==
@@ -118,7 +121,8 @@ annotation(defaultComponentName="lat",
     Text(extent={{-150,150},{150,110}},
       textColor={0,0,255},
       textString="%name")}),
-  Documentation(info="<html>
+  Documentation(
+    info="<html>
 <p>
 Block that generates a <code>true</code> output when the latch input
 <code>u</code>

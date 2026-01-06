@@ -74,7 +74,8 @@ equation
     y[:] = val[idx, :];
   end when;
 annotation(defaultComponentName="intTimTab",
-  Documentation(info="<html>
+  Documentation(
+    info="<html>
 <p>
 Block that outputs <code>Integer</code> time table values.
 </p>

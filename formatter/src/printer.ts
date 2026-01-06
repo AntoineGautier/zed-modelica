@@ -61,6 +61,11 @@ function isInsideIfExpressionValue(path: AstPath<ASTNode>): boolean {
     const ancestor = path.getParentNode(i);
     if (!ancestor) break;
 
+    // Parenthesized expressions act as a boundary - they reset the context
+    if (ancestor.type === "parenthesized_expression") {
+      return false;
+    }
+
     if (ancestor.type === "if_expression") {
       // Found an if_expression ancestor. Now check which child we came from.
       // We need to find the child at index i-1 and check its position in the if_expression
@@ -115,10 +120,10 @@ function isInContinuationContext(path: AstPath<ASTNode>): boolean {
       return true;
     }
 
-    // If we're inside a parenthesized_expression, we're in continuation context
-    // The parenthesized_expression adds indent for its content
+    // Parenthesized expressions act as a boundary - they reset the continuation context
+    // Inner constructs add their own indent
     if (ancestor.type === "parenthesized_expression") {
-      return true;
+      return false;
     }
 
     // If we're inside an if_expression's then/else value, we're in continuation context
@@ -1540,12 +1545,12 @@ export const printModelica: Printer<ASTNode>["print"] = (
       for (let i = 0; i < node.children.length; i++) {
         const child = node.children[i];
         if (child.type === "expression") {
-          // Condition expression with proper indentation for continuations
-          // and line breaking before "then" if needed
+          // Condition expression - inner constructs (binary_expression, etc.)
+          // handle their own indentation for continuations
           const condExpr = path.call(print, "children", i);
-          // Structure: "if " + condition on same line, continuations indented,
+          // Structure: "if " + condition on same line,
           // "then" either on same line (if fits) or new line (at if's level)
-          parts.push(group(["if ", indent(condExpr), line, "then"]));
+          parts.push(group(["if ", condExpr, line, "then"]));
         } else if (
           child.type === "equation_list" ||
           child.type === "statement_list"
@@ -1962,25 +1967,29 @@ export const printModelica: Printer<ASTNode>["print"] = (
             return operands[0];
           }
 
-          // Build flat structure with sibling groups, same as arithmetic operators.
-          // Each operator+operand pair is an independent group that decides
-          // whether to break based on remaining space on the current line.
-          // All continuations in the same flattened chain share the same indent level.
-          const parts: Doc[] = [operands[0]];
+          // Build flat structure with all continuations sharing the same indent level.
+          // All continuation lines after the first operand are wrapped in a single
+          // indent block to ensure they all align at the same level, avoiding
+          // cascading indents or dedenting back to baseline.
+          const inContinuation = isInContinuationContext(path);
 
-          for (let i = 0; i < ops.length; i++) {
-            // Use centralized handler for first operand, simple line for rest
-            // This ensures only +1 indent level for the entire chain
-            parts.push(
-              " ",
-              ops[i],
-              i === 0
-                ? wrapContinuation(operands[i + 1], path)
-                : group([line, operands[i + 1]]),
-            );
+          if (inContinuation) {
+            // Already in continuation context - no additional indent
+            // Each continuation uses group([line, ...]) to allow independent breaking
+            const parts: Doc[] = [operands[0]];
+            for (let i = 0; i < ops.length; i++) {
+              parts.push(" ", ops[i], group([line, operands[i + 1]]));
+            }
+            return group(parts);
+          } else {
+            // Not in continuation context - wrap ALL continuations in shared indent block
+            // This ensures all continuation lines align at the same indent level
+            const continuationParts: Doc[] = [];
+            for (let i = 0; i < ops.length; i++) {
+              continuationParts.push(line, ops[i], " ", operands[i + 1]);
+            }
+            return group([operands[0], indent(continuationParts)]);
           }
-
-          return parts;
         }
 
         // Arithmetic operators: allow breaking after operator when line is too long
@@ -2231,15 +2240,10 @@ export const printModelica: Printer<ASTNode>["print"] = (
 
     case "parenthesized_expression": {
       // Wrap in parens - content starts on same line as '('
-      // Add indent for content when it breaks, but only if not already in continuation context
+      // Don't add indent here - inner constructs (binary_expression, function_call_args)
+      // handle their own indentation. This avoids double indent issues.
       const content = path.map(print, "children");
-
-      if (isInContinuationContext(path)) {
-        // Already in continuation context - no additional indent
-        return group(["(", content, ")"]);
-      }
-      // Not in continuation context - add indent for breaks
-      return group(["(", indent(content), ")"]);
+      return group(["(", content, ")"]);
     }
 
     case "output_expression_list":

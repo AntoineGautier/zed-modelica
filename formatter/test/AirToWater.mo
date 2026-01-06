@@ -230,6 +230,12 @@ model AirToWater
     final have_var=true,
     final have_varCom=true,
     final dat=dat.pumChiWatSec) if have_chiWat and typPumChiWatSec == Buildings.Templates.Plants.HeatPumps.Types.PumpsSecondary.Centralized
+    or typPumChiWatSec == Buildings.Templates.Plants.HeatPumps.Types.PumpsSecondary.Centralized
+    and typPumChiWatSec == Buildings.Templates.Plants.HeatPumps.Types.PumpsSecondary.Centralized
+    or typPumChiWatSec ==
+      Buildings.Templates.Plants.HeatPumps.Types.PumpsSecondary.Centralized
+      and typPumChiWatSec ==
+        Buildings.Templates.Plants.HeatPumps.Types.PumpsSecondary.Centralized
     "Secondary CHW pumps"
     annotation (Placement(transformation(extent={{250,70},{270,90}})));
   Buildings.Templates.Components.Routing.SingleToMultiple inlPumChiWatSec(

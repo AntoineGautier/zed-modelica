@@ -21,6 +21,10 @@ final model RefrigerantCycleChillerCooling=Buildings.Fluid.Chillers.ModularRever
       +  mLiq_flow_nominal - MediumLiq.specificEnthalpy_pTX(
       MediumLiq.p_default, TLiqLvg_nominal, X=MediumLiq.X_default))*
       mLiq_flow_nominal - MediumLiq.specificEnthalpy_pTX(
+        specificEnthalpy_pTX(
+        MediumLiq.p_default,
+        TLiqLvg_nominal,
+        X=MediumLiq.X_default),
       MediumLiq.p_default,
       TLiqLvg_nominal,
       X=MediumLiq.X_default)

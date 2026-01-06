@@ -32,7 +32,9 @@ final parameter Modelica.Units.SI.PressureDifference dpBalChiWatHp_nominal =
   if is_dpBalYPumSetCal and
   (typPumChiWatPri == Buildings.Templates.Plants.HeatPumps.Types.PumpsPrimary.Constant or
     have_chiWat and not have_pumChiWatPriDed and
-    typPumHeaWatPri == Buildings.Templates.Plants.HeatPumps.Types.PumpsPrimary.Constant)
+    typPumHeaWatPri == Buildings.Templates.Plants.HeatPumps.Types.PumpsPrimary.Constant or
+    typPumHeaWatPri ==
+      Buildings.Templates.Plants.HeatPumps.Types.PumpsPrimary.Constant)
   then Buildings.Templates.Utilities.computeBalancingPressureDrop(m_flow_nominal=hp.mChiWatHp_flow_nominal,
   dp_nominal=hp.dpChiWatHp_nominal + max(valIso.dpValveChiWadcdcscsccscezt_nominal) *
       ((if have_valHpInlIso then 1 else 0) +
@@ -71,7 +73,9 @@ initial equation
       if is_dpBalYPumSetCal and have_chiWat and
         typDis == Buildings.Templates.Plants.HeatPumps.Types.Distribution.Constant1Variable2 and
         (typPumChiWatPri == Buildings.Templates.Plants.HeatPumps.Types.PumpsPrimary.Variable or
-          typPumChiWatPri == Buildings.Templates.Plants.HeatPumps.Types.PumpsPrimary.None and
+          typPumChiWatPri == Buildings.Templates.Plants.HeatPumps.Types.PumpsPrimary.None       or
+          typPumChiWatPri ==
+            Buildings.Templates.Plants.HeatPumps.Types.PumpsPrimary.None and
           typPumHeaWatPri == Buildings.Templates.Plants.HeatPumps.Types.PumpsPrimary.Variable) then
         0 = Buildings.Templates.Utilities.computeBalancingPressureDrop(
           m_flow_nominal=hp.mChiWatHp_flow_nominal,

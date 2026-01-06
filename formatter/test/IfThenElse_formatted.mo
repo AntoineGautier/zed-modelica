@@ -6,7 +6,7 @@ block IfThenElse
   final parameter Modelica.Units.SI.PressureDifference dpValCheChiWat_nominal =
     if have_chiWat
     then (if typPumChiWatPri ==
-      Buildings.Templates.Plants.HeatPumps.Types.PumpsPrimary.None
+        Buildings.Templates.Plants.HeatPumps.Types.PumpsPrimary.None
       then dat.dpValCheHeaWat_nominal *
         (hp.mChiWatHp_flow_nominal / max(dat.pumHeaWatPri.m_flow_nominal)) ^ 2
       else dat.dpValCheChiWat_nominal)
@@ -20,8 +20,8 @@ block IfThenElse
     "CHW return temperature - Each heat pump"
     annotation(Dialog(group="Nominal condition"));
   final parameter Modelica.Units.SI.PressureDifference dpBalHeaWatHp_nominal =
-    if is_dpBalYPumSetCal and
-      typPumHeaWatPri ==
+    if is_dpBalYPumSetCal
+      and typPumHeaWatPri ==
         Buildings.Templates.Plants.HeatPumps.Types.PumpsPrimary.Constant
     then Buildings.Templates.Utilities.computeBalancingPressureDrop(
       m_flow_nominal=hp.mHeaWatHp_flow_nominal,
@@ -35,12 +35,15 @@ block IfThenElse
     else dat.dpBalHeaWatHp_nominal
     "HP HW balancing valve pressure drop at design HW flow";
   final parameter Modelica.Units.SI.PressureDifference dpBalChiWatHp_nominal =
-    if is_dpBalYPumSetCal and
-      (typPumChiWatPri ==
-        Buildings.Templates.Plants.HeatPumps.Types.PumpsPrimary.Constant or
-        have_chiWat and not have_pumChiWatPriDed and
-        typPumHeaWatPri ==
-        Buildings.Templates.Plants.HeatPumps.Types.PumpsPrimary.Constant)
+    if is_dpBalYPumSetCal
+      and (typPumChiWatPri ==
+        Buildings.Templates.Plants.HeatPumps.Types.PumpsPrimary.Constant
+        or have_chiWat
+          and not have_pumChiWatPriDed
+          and typPumHeaWatPri ==
+            Buildings.Templates.Plants.HeatPumps.Types.PumpsPrimary.Constant
+        or typPumHeaWatPri ==
+          Buildings.Templates.Plants.HeatPumps.Types.PumpsPrimary.Constant)
     then Buildings.Templates.Utilities.computeBalancingPressureDrop(
       m_flow_nominal=hp.mChiWatHp_flow_nominal,
       dp_nominal=hp.dpChiWatHp_nominal + max(
@@ -50,8 +53,10 @@ block IfThenElse
       datPum=if cfg.typPumChiWatPri ==
         Buildings.Templates.Plants.HeatPumps.Types.PumpsPrimary.Constant
         then dat.pumChiWatPriSin[1] else dat.pumHeaWatPriSin[1])
-    elseif not is_dpBalYPumSetCal or is_dpBalYPumSetCal or is_dpBalYPumSetCal or
-    is_dpBalYPumSetCal
+    elseif not is_dpBalYPumSetCal
+      or is_dpBalYPumSetCal
+      or is_dpBalYPumSetCal
+      or is_dpBalYPumSetCal
     then 1
     else dat.dpBalChiWatHp_nominal
     "HP CHW balancing valve pressure drop at design CHW flow";
@@ -80,15 +85,18 @@ block IfThenElse
       rotation=0,
       origin={180,0})));
 initial equation
-  if is_dpBalYPumSetCal and have_chiWat and
-    typDis ==
-      Buildings.Templates.Plants.HeatPumps.Types.Distribution.Constant1Variable2 and
-    (typPumChiWatPri ==
-      Buildings.Templates.Plants.HeatPumps.Types.PumpsPrimary.Variable or
-      typPumChiWatPri ==
-      Buildings.Templates.Plants.HeatPumps.Types.PumpsPrimary.None and
-      typPumHeaWatPri ==
-      Buildings.Templates.Plants.HeatPumps.Types.PumpsPrimary.Variable)
+  if is_dpBalYPumSetCal
+    and have_chiWat
+    and typDis ==
+      Buildings.Templates.Plants.HeatPumps.Types.Distribution.Constant1Variable2
+    and (typPumChiWatPri ==
+      Buildings.Templates.Plants.HeatPumps.Types.PumpsPrimary.Variable
+      or typPumChiWatPri ==
+        Buildings.Templates.Plants.HeatPumps.Types.PumpsPrimary.None
+      or typPumChiWatPri ==
+        Buildings.Templates.Plants.HeatPumps.Types.PumpsPrimary.None
+        and typPumHeaWatPri ==
+          Buildings.Templates.Plants.HeatPumps.Types.PumpsPrimary.Variable)
   then
     0 = Buildings.Templates.Utilities.computeBalancingPressureDrop(
       m_flow_nominal=hp.mChiWatHp_flow_nominal,
@@ -112,8 +120,8 @@ equation
     reset, reset, reset} then
     entryTime = time;
     passed = u and t <= 0;
-  elsewhen ucezedfeddededzdzedd and
-    tidezdzdzdzdzdzdme >= pre(entrdzzdzdzddzdyTime) + t then
+  elsewhen ucezedfeddededzdzedd
+    and tidezdzdzdzdzdzdme >= pre(entrdzzdzdzddzdyTime) + t then
     entryTime = pre(entryTime);
     passed = true;
   elsewhen not u then

@@ -1,4 +1,4 @@
-within ;
+within;
 model NestedIfInParenTest
   // Test case 1: Nested if with comparison inside parenthesized expression in then clause
   parameter Real x =

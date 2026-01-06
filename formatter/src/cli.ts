@@ -20,6 +20,7 @@ function removeWhitespace(content: string): string {
 // Parse command-line arguments
 const args = process.argv.slice(2);
 
+// prettier-ignore
 function printHelp() {
   console.log("Usage: modelica-format <file.mo> [options]");
   console.log("");
@@ -27,36 +28,22 @@ function printHelp() {
   console.log("  <file.mo>            Path to a Modelica file to format");
   console.log("");
   console.log("Options:");
-  console.log(
-    "  --write, -w          Write formatted output back to input file",
-  );
-  console.log(
-    "                       (will not write if idempotence check fails)",
-  );
-  console.log(
-    "  --output, -o <file>  Write formatted output to specified file",
-  );
-  console.log(
-    "                       (will not write if idempotence check fails)",
-  );
+  console.log("  --write, -w          Write formatted output back to input file");
+  console.log("                       (will not write if idempotence check fails)");
+  console.log("  --output, -o <file>  Write formatted output to specified file");
+  console.log("                       (will not write if idempotence check fails)");
   console.log("  --check, -c          Check if formatting is idempotent");
   console.log("                       (exit 0 if idempotent, exit 1 if not)");
   console.log("  --quiet, -q          Suppress output except errors");
   console.log("  --help, -h           Show this help message");
   console.log("");
-  console.log(
-    "Note: Idempotence check compares original and formatted content",
-  );
+  console.log("Note: Idempotence check compares original and formatted content");
   console.log("      (ignoring whitespace) to ensure formatting is stable.");
   console.log("");
   console.log("Examples:");
-  console.log(
-    "  modelica-format model.mo              # Preview formatted output",
-  );
+  console.log("  modelica-format model.mo              # Preview formatted output");
   console.log("  modelica-format model.mo --write      # Format and overwrite");
-  console.log(
-    "  modelica-format model.mo -o out.mo    # Format and save to new file",
-  );
+  console.log("  modelica-format model.mo -o out.mo    # Format and save to new file");
   console.log("  modelica-format model.mo --check      # Check if idempotent");
 }
 

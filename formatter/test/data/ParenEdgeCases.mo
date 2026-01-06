@@ -1,4 +1,4 @@
-within ;
+within;
 model ParenEdgeCases
   // Edge case 1: Nested if in parenthesized expression with long comparison operator RHS
   parameter Real test1 =

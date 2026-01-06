@@ -59,9 +59,6 @@ const options: Record<string, SupportOption> = {
   },
 };
 
-
-
-// Export the plugin
 const plugin: Plugin<ASTNode> = {
   languages,
   parsers,

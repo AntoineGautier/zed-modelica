@@ -82,70 +82,61 @@ Block that outputs <code>Integer</code> time table values.
 <p>
 The block takes as a parameter a time table of a format:
 </p>
-<pre>
-table = [
-0*3600, 2; 6*3600, 1; 18*3600, 8]; period = 24*3600;
+<pre> table = [0*3600, 2;
+               6*3600, 1;
+               18*3600, 8];
+      period = 24*3600;
 </pre>
 <p>
-where the first
-column of <code>table</code> is time and the remaining column(s) are the table
-values. The time column contains <code>Real</code> values that are in units of
-seconds if <code>timeScale = 1</code>.
-The parameter <code>timeScale</code> can
-be used to scale the time values, for example, use
-<code>timeScale = 3600</code>
-if the values in the first column are interpreted as hours.
+where the first column of <code>table</code> is time and the remaining column(s)
+are the table values. The time column contains <code>Real</code> values that are
+in units of seconds if <code>timeScale = 1</code>. The parameter
+<code>timeScale</code> can be used to scale the time values, for example, use
+<code>timeScale = 3600</code> if the values in the first column are interpreted
+as hours.
 </p>
 <p>
-The values
-in column two and higher must be of type <code>Integer</code>, otherwise the
-model stops with an error.
+The values in column two and higher must be of type <code>Integer</code>,
+otherwise the model stops with an error.
 </p>
 <p>
-Until a new tabulated value is set, the
-previous tabulated value is returned.
+Until a new tabulated value is set, the previous tabulated value is returned.
 </p>
 <p>
-The table scope is repeated
-periodically with periodicity <code>period</code>.
+The table scope is repeated periodically with periodicity <code>period</code>.
 </p>
 </html>",
     revisions="<html>
 <ul>
 <li>
 October 21, 2021, by Michael Wetter:<br/>
-Removed writing
-output value in icon (as it is an array of values).
+Removed writing output value in icon (as it is an array of values).
 </li>
 <li>
-November 12,
-2020, by Michael Wetter:<br/>
-Reformulated to remove dependency to <code>
-Modelica.Units.SI</code>.<br/>
+November 12, 2020, by Michael Wetter:<br/>
+Reformulated to remove dependency to <code>Modelica.Units.SI</code>.<br/>
 This is for
 <a href=\"https://github.com/lbl-srg/modelica-buildings/issues/2243\">Buildings,
 issue 2243</a>.
 </li>
 <li>
 October 19, 2020, by Michael Wetter:<br/>
-Revised to
-call <code>round()</code> as a function.<br/>
+Revised to call <code>round()</code> as a function.<br/>
 For
-<a href=\"https://github.com/lbl-srg/modelica-buildings/issues/2170\">Buildings,
-issue 2170</a>.
+<a href=\"https://github.com/lbl-srg/modelica-buildings/issues/2170\">
+Buildings, issue 2170</a>.
 </li>
 <li>
 October 7, 2020, by Michael Wetter:<br/>
-Revised
-implementation to add <code>timeSpan</code> and to guard against rounding
-errors. Refactored to avoid non-needed event-triggering functions. Removed
-parameter <code>offset</code> as I don't see a use case that justifies this
-complexity.
+Revised implementation to add <code>timeSpan</code> and to guard against
+rounding errors. Refactored to avoid non-needed event-triggering functions.
+Removed parameter <code>offset</code> as I don't see a use case that justifies
+this complexity.
 </li>
 <li>
 September 14, 2020, by Milica Grahovac:<br/>
-Initial CDL
-implementation based on continuous time table implementation in CDL.
+Initial CDL implementation based on continuous time table implementation in
+CDL.
 </li>
 </ul>
 </html>"),

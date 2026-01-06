@@ -6,6 +6,7 @@
 import type { AstPath, Doc, Printer } from "prettier";
 import { doc } from "prettier";
 import type { ASTNode } from "./parser.js";
+import { formatHTMLString, DEFAULT_PRESERVED_TAGS } from "./html-formatter.js";
 
 const { builders } = doc;
 const {
@@ -181,7 +182,10 @@ function isInContinuationContext(path: AstPath<ASTNode>): boolean {
       // We're in the condition - check if the if_expression is inside a parenthesized_expression
       // that will add indent via option2Operand. Pattern: if_expression -> expression -> output_expression_list -> parenthesized_expression
       const ifParent = path.getParentNode(i + 1);
-      if (ifParent?.type === "expression" || ifParent?.type === "simple_expression") {
+      if (
+        ifParent?.type === "expression" ||
+        ifParent?.type === "simple_expression"
+      ) {
         const ifGrandparent = path.getParentNode(i + 2);
         if (ifGrandparent?.type === "output_expression_list") {
           const ifGreatGrandparent = path.getParentNode(i + 3);
@@ -324,103 +328,6 @@ function isMidLineIfExpression(path: AstPath<ASTNode>): boolean {
   }
 
   return false;
-}
-
-/**
- * Simple HTML formatter for documentation strings
- * Enforces line length while preserving structure and never breaking within words/tags
- * @param removeEmptyLines - If true, removes all empty lines from the output
- */
-function formatHTMLString(
-  html: string,
-  maxWidth: number = 80,
-  baseIndent: string = "",
-  removeEmptyLines: boolean = true,
-): string {
-  const lines: string[] = [];
-  let currentLine = baseIndent;
-
-  // Split on tags and text, preserving structure
-  const tokens = html.match(/(<[^>]+>|[^<]+)/g) || [];
-
-  for (const token of tokens) {
-    if (token.startsWith("<")) {
-      // This is a tag - add it to current line
-      if (
-        currentLine.length + token.length > maxWidth &&
-        currentLine.trim().length > 0
-      ) {
-        // Tag would exceed limit, start new line
-        lines.push(currentLine.trimEnd());
-        currentLine = baseIndent + token;
-      } else {
-        currentLine += token;
-      }
-    } else {
-      // This is text content - try to keep phrases together
-      // Only break at spaces when line would exceed limit
-      if (
-        currentLine.length + token.length > maxWidth &&
-        currentLine.trim().length > 0
-      ) {
-        // Text would exceed limit - need to break it
-        // Preserve leading whitespace
-        const leadingSpace = token.match(/^\s*/)?.[0] || "";
-        const trailingSpace = token.match(/\s*$/)?.[0] || "";
-        const trimmedToken = token.trim();
-
-        if (trimmedToken) {
-          const words = trimmedToken.split(/\s+/);
-
-          for (let i = 0; i < words.length; i++) {
-            const word = words[i];
-            const isFirst = i === 0;
-            const isLast = i === words.length - 1;
-
-            if (
-              currentLine.length +
-                (isFirst ? leadingSpace.length : 1) +
-                word.length >
-                maxWidth &&
-              currentLine.trim().length > 0
-            ) {
-              // Start new line
-              lines.push(currentLine.trimEnd());
-              currentLine = baseIndent + word + (isLast ? trailingSpace : "");
-            } else {
-              currentLine +=
-                (isFirst ? leadingSpace : " ") +
-                word +
-                (isLast ? trailingSpace : "");
-            }
-          }
-        } else {
-          // Token is only whitespace, just add it if there's room
-          if (currentLine.length + token.length <= maxWidth) {
-            currentLine += token;
-          }
-        }
-      } else {
-        // Whole text fits, add it
-        currentLine += token;
-      }
-    }
-  }
-
-  if (currentLine.trim().length > 0) {
-    lines.push(currentLine.trimEnd());
-  }
-
-  let result = lines.join("\n");
-
-  if (removeEmptyLines) {
-    result = result
-      .split("\n")
-      .filter((line) => line.trim().length > 0)
-      .join("\n");
-  }
-
-  return result;
 }
 
 /**
@@ -702,8 +609,13 @@ export const printModelica: Printer<ASTNode>["print"] = (
         const match = text.match(/^"(.*)"$/s);
         if (match) {
           const htmlContent = match[1];
-          // Format HTML with line length limit
-          const formatted = formatHTMLString(htmlContent, 80, "");
+          // Format HTML with line length limit, preserving <pre> and <code> content
+          const formatted = formatHTMLString(htmlContent, {
+            maxWidth: 80,
+            baseIndent: "",
+            removeEmptyLines: true,
+            preservedTags: DEFAULT_PRESERVED_TAGS,
+          });
           return `"${formatted}"`;
         }
       }
@@ -725,11 +637,11 @@ export const printModelica: Printer<ASTNode>["print"] = (
       return join(hardline, path.map(print, "children"));
 
     case "within_clause": {
-      const parts: Doc[] = ["within "];
+      const parts: Doc[] = ["within"];
       for (let i = 0; i < node.children.length; i++) {
         const child = node.children[i];
         if (child.type === "name") {
-          parts.push(path.call(print, "children", i));
+          parts.push(" ", path.call(print, "children", i));
         }
       }
       parts.push(";");
@@ -1291,7 +1203,7 @@ export const printModelica: Printer<ASTNode>["print"] = (
               // Try inline first, break only if doesn't fit
               return conditionalGroup([
                 ["(", elementArgs[0], ")"],
-                ["(", indent([softline, elementArgs[0], ")"])]
+                ["(", indent([softline, elementArgs[0], ")"])],
               ]);
             }
             // Multiple args: try first inline, break only if doesn't fit
@@ -1416,7 +1328,7 @@ export const printModelica: Printer<ASTNode>["print"] = (
       }
 
       const inAnnotation = isInsideAnnotation(path);
-      
+
       for (let i = 0; i < node.children.length; i++) {
         const child = node.children[i];
         if (child.type === "name") {

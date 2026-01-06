@@ -8,7 +8,7 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 FORMATTER_DIR="$(dirname "$SCRIPT_DIR")"
-TEST_DIR="$SCRIPT_DIR"
+TEST_DIR="$SCRIPT_DIR/data"
 
 cd "$FORMATTER_DIR"
 
@@ -17,19 +17,44 @@ echo "Running formatter tests..."
 # Find all .mo files not containing '_formatted' in the name
 for file in "$TEST_DIR"/*.mo; do
     filename=$(basename "$file")
-    
-    # Skip files that contain '_formatted'
-    if [[ "$filename" == *"_formatted"* ]]; then
-        continue
-    fi
-    
-    # Get the base name without extension
-    base="${filename%.mo}"
-    
+
     echo "Formatting: $filename"
-    
-    # Run prettier and output to _formatted.mo
-    npx prettier --plugin ./dist/index.js "test/$filename" > "test/${base}_formatted.mo"
+
+    # Format inplace w/ idempotence check
+    npx tsx src/cli.ts "$TEST_DIR/$filename" --write --check
+
+    # Check that no line has more than +2 spaces compared to previous non-empty line
+    prev_indent=0
+    line_num=0
+    while IFS= read -r line; do
+        line_num=$((line_num + 1))
+
+        # Stop checking when hitting HTML tag
+        if echo "$line" | grep -q '<html>'; then
+            break
+        fi
+
+        # Skip empty lines
+        if [ -z "$(echo "$line" | tr -d '[:space:]')" ]; then
+            continue
+        fi
+
+        # Count leading spaces
+        current_indent=$(echo "$line" | sed 's/[^ ].*//' | wc -c)
+        current_indent=$((current_indent - 1))  # wc -c counts newline
+
+        # Check if indentation increased by more than 2
+        indent_diff=$((current_indent - prev_indent))
+        if [ $indent_diff -gt 2 ]; then
+            echo "✗ Excessive indentation in $filename:$line_num"
+            echo "  Previous non-empty line indent: $prev_indent spaces"
+            echo "  Current line indent: $current_indent spaces"
+            echo "  Difference: $indent_diff spaces (max allowed: 2)"
+            exit 1
+        fi
+
+        prev_indent=$current_indent
+    done < "$TEST_DIR/$filename"
 done
 
 echo ""
@@ -44,7 +69,3 @@ else
     git diff HEAD -- "$TEST_DIR"/*.mo
     exit 1
 fi
-
-echo ""
-echo "Running idempotence test..."
-node "$TEST_DIR/verify-idempotence.js"

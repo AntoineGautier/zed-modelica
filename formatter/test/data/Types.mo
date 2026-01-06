@@ -23,18 +23,21 @@ selected via choices menu):
 <th>Enumeration</th>
     <th>Description</th></tr>
 <tr><td>OpPoint</td>
-<td>flow coefficient defined by ratio m_flow_nominal/sqrt(dp_nominal)</td></tr>
-<tr><td>Kv</td>
+<td>flow
+coefficient defined by ratio m_flow_nominal/sqrt(dp_nominal)</td></tr>
+<tr><td>
+Kv</td>
     <td>Kv (metric) flow coefficient</td></tr>
 <tr><td>Cv</td>
-<td>Cv (US) flow coefficient</td></tr>
+<td>Cv
+(US) flow coefficient</td></tr>
 <tr><td>Av</td>
     <td>Av (metric) flow
 coefficient</td></tr>
 </table>
 <p>
-The details of the coefficients are
-explained in the
+The details of the coefficients are explained
+in the
 <a href=\"modelica://Modelica.Fluid.UsersGuide.ComponentDefinition.ValveCharacteristics\">
 Users Guide</a>.
 </p>

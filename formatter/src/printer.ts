@@ -53,6 +53,13 @@ function isIfExpressionValue(ifExpr: ASTNode, childIndex: number): boolean {
  * For example, in: `then (if X then Y else Z)`
  * The inner if_expression should know it's inside the outer then's value,
  * so its own then/else keywords should be indented.
+ *
+ * Note: Parenthesized expressions are TRANSPARENT - we look through them to find
+ * the outer if_expression context. This is crucial for preventing double indentation
+ * in patterns like:
+ *   then (if var == Long.Package.Name
+ *     then result
+ * Without transparency, the comparison RHS would be double-indented.
  */
 function isInsideIfExpressionValue(path: AstPath<ASTNode>): boolean {
   // Walk up the parent chain looking for if_expression
@@ -61,10 +68,8 @@ function isInsideIfExpressionValue(path: AstPath<ASTNode>): boolean {
     const ancestor = path.getParentNode(i);
     if (!ancestor) break;
 
-    // Parenthesized expressions act as a boundary - they reset the context
-    if (ancestor.type === "parenthesized_expression") {
-      return false;
-    }
+    // Parenthesized expressions are transparent - look through them to outer context
+    // This prevents false negatives when checking if we're in an if_expression's then/else value
 
     if (ancestor.type === "if_expression") {
       // Found an if_expression ancestor. Now check which child we came from.
@@ -104,6 +109,26 @@ function isInsideIfExpressionValue(path: AstPath<ASTNode>): boolean {
  * - component_declaration
  * - equation / statement boundaries
  * - function_call_args (each function call is its own context)
+ *
+ * IMPORTANT: Parenthesized expressions are TRANSPARENT to continuation context.
+ * This means they propagate the outer continuation context to their inner content.
+ * 
+ * Why? Consider this pattern:
+ *   if outer_cond
+ *   then (if inner_var == Very.Long.Package.Name
+ *     then result
+ * 
+ * Without transparency:
+ * - The outer if adds indent for its then-value (the parenthesized expression)
+ * - Parens reset context, so inner binary_expression (==) sees no continuation context
+ * - Binary_expression adds its own indent for the RHS
+ * - Result: double indentation for "Very.Long.Package.Name"
+ *
+ * With transparency:
+ * - The outer if adds indent for its then-value
+ * - Parens are transparent, so inner binary_expression sees continuation context
+ * - Binary_expression doesn't add extra indent (already in continuation context)
+ * - Result: correct single indentation level
  */
 function isInContinuationContext(path: AstPath<ASTNode>): boolean {
   // Start from i=1 to skip the current node itself
@@ -120,12 +145,8 @@ function isInContinuationContext(path: AstPath<ASTNode>): boolean {
       return true;
     }
 
-    // Parenthesized expressions act as a boundary - they reset the continuation context
-    // Inner constructs add their own indent
-    if (ancestor.type === "parenthesized_expression") {
-      return false;
-    }
-
+    // Check if_expression BEFORE parenthesized_expression to properly detect
+    // nested if-expressions inside then/else clauses
     // If we're inside an if_expression's then/else value, we're in continuation context
     // The if_expression adds indent for its then/else values
     // But NOT for the condition part - use isInsideIfExpressionValue to check properly
@@ -136,6 +157,9 @@ function isInContinuationContext(path: AstPath<ASTNode>): boolean {
       }
       // We're in the condition - not continuation context, continue searching
     }
+
+    // Parenthesized expressions are transparent - propagate outer continuation context inward
+    // This is essential to prevent double indentation in nested if-expressions with comparisons
 
     // Stop at these boundaries - they reset the continuation context
     if (ancestor.type === "declaration") break;

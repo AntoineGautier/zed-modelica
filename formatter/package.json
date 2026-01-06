@@ -27,7 +27,7 @@
     "format": "node dist/cli.js",
     "parse": "tsx src/cli.ts",
     "test": "npm run build && bash test/run-tests.sh",
-    "test:idempotence": "node test/verify-idempotence.js"
+    "test:indentcheck": "npm run build && bash test/run-tests.sh --indent-check"
   },
   "keywords": [
     "prettier",

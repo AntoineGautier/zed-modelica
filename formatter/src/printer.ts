@@ -178,7 +178,20 @@ function isInContinuationContext(path: AstPath<ASTNode>): boolean {
       if (isInsideIfExpressionValue(path)) {
         return true;
       }
-      // We're in the condition - not continuation context, continue searching
+      // We're in the condition - check if the if_expression is inside a parenthesized_expression
+      // that will add indent via option2Operand. Pattern: if_expression -> expression -> output_expression_list -> parenthesized_expression
+      const ifParent = path.getParentNode(i + 1);
+      if (ifParent?.type === "expression" || ifParent?.type === "simple_expression") {
+        const ifGrandparent = path.getParentNode(i + 2);
+        if (ifGrandparent?.type === "output_expression_list") {
+          const ifGreatGrandparent = path.getParentNode(i + 3);
+          if (ifGreatGrandparent?.type === "parenthesized_expression") {
+            // The parenthesized expression will provide indent via option2Operand
+            return true;
+          }
+        }
+      }
+      // We're in the condition but not in a paren - not continuation context, continue searching
     }
 
     // Parenthesized expressions are transparent - propagate outer continuation context inward

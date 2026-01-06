@@ -19,6 +19,11 @@ block IfThenElse
     else Buildings.Templates.Data.Defaults.TChiWatRet
     "CHW return temperature - Each heat pump"
     annotation(Dialog(group="Nominal condition"));
+  parameter Modelica.Units.SI.Temperature TLiqLvg_nominal =
+    TLiqEnt_nominal + (if typ ==
+      Buildings.Fluid.HydronicConfigurations.Types.Control.Heating
+      then -10 else +5)
+    "Liquid leaving temperature at design conditions";
   final parameter Modelica.Units.SI.PressureDifference dpBalHeaWatHp_nominal =
     if is_dpBalYPumSetCal
       and typPumHeaWatPri ==

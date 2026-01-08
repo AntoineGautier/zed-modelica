@@ -61,71 +61,89 @@ annotation(defaultComponentName="lat",
   Documentation(
     info="<html>
 <p>
-Block that generates a <code>true</code> output when the latch input
-<code>u</code> rises from <code>false</code> to <code>true</code>, provided that
-the clear input <code>clr</code> is <code>false</code> or also became at the
-same time <code>false</code>. The output remains <code>true</code> until the
-clear input <code>clr</code> rises from <code>false</code> to <code>true</code> .
+  Block that generates a <code>true</code> output when the latch input
+  <code>u</code> rises from <code>false</code> to
+  <code>true</code>, provided that the clear input <code>clr</code>
+  is <code>false</code> or also became at the same time
+  <code>false</code>. The output remains <code>true</code> until the
+  clear input <code>clr</code> rises from <code>false</code> to
+  <code>true</code> .
 </p>
 <p>
-If the clear input <code>clr</code> is <code>true</code>, the output
-<code>y</code> switches to <code>false</code> (if it was <code>true</code>) and
-it remains <code>false</code>, regardless of the value of the latch input
-<code>
+  If the clear input <code>clr</code> is <code>true</code>, the
+  output <code>y</code> switches to <code>false</code> (if it was
+  <code>true</code>) and it remains <code>false</code>, regardless of
+  the value of the latch input <code>
 u</code>.
 </p>
 <p>
-At initial time, if <code>clr = false</code>, then the output will be
-<code>y = u</code>. Otherwise it will be <code>y=false</code> (because the clear
-input <code>clr</code> is <code>true</code>).
+  At initial time, if <code>clr = false</code>, then the output will be
+  <code>y = u</code>. Otherwise it will be <code>y=false</code> (because
+  the clear input <code>clr</code> is <code>true</code>).
 </p>
 <p align=\"center\">
-<img src=\"modelica://Buildings/Resources/Images/Controls/OBC/CDL/Logical/Latch.png\" alt=\"Latch.png\" />
+  <img
+    src=\"modelica://Buildings/Resources/Images/Controls/OBC/CDL/Logical/Latch.png\"
+    alt=\"Latch.png\"
+  />
 </p>
-</html>",
+</html>
+",
     revisions="<html>
 <ul>
-<li>
-November 3, 2025, by Michael Wetter:<br/>
-Reformulated initialization to enable translation of system model with this
-block in OpenModelica.<br/>
-This is for
-<a href=\"https://github.com/ibpsa/modelica-ibpsa/issues/2064\">
-IBPSA, issue 2064</a>.
-</li>
-<li>
-April 15, 2024, by Antoine Gautier:<br/>
-Simplified the implementation.<br/>
-This is for
-<a href=\"https://github.com/lbl-srg/modelica-buildings/issues/3796\">Buildings,
-issue 3796</a>.
-</li>
-<li>
-October 13, 2020, by Jianjun Hu:<br/>
-Removed the parameter <code>pre_y_start</code>, and made the initial output to
-be equal to latch input when the clear input is <code>false</code>.<br/>
-This is for
-<a href=\"https://github.com/lbl-srg/modelica-buildings/issues/2177\">Buildings,
-issue 2177</a>.
-</li>
-<li>
-March 9, 2020, by Michael Wetter:<br/>
-Simplified implementation, and made model work with OpenModelica.
-</li>
-<li>
-April 4, 2019, by Jianjun Hu:<br/>
-Corrected implementation that causes wrong output at initial stage. This is for
-<a href=\"https://github.com/lbl-srg/modelica-buildings/issues/1402\">Buildings,
-issue 1402</a>.
-</li>
-<li>
-December 1, 2017, by Michael Wetter:<br/>
-Revised documentation.
-</li>
-<li>
-March 30, 2017, by Jianjun Hu:<br/>
-First implementation.
-</li>
+  <li>
+    November 3, 2025, by Michael Wetter:
+    <br />
+    Reformulated initialization to enable translation of system model with
+    this block in OpenModelica.
+    <br />
+    This is for
+    <a href=\"https://github.com/ibpsa/modelica-ibpsa/issues/2064\">
+      IBPSA, issue 2064</a>.
+  </li>
+  <li>
+    April 15, 2024, by Antoine Gautier:
+    <br />
+    Simplified the implementation.
+    <br />
+    This is for
+    <a href=\"https://github.com/lbl-srg/modelica-buildings/issues/3796\">Buildings,
+      issue 3796</a>.
+  </li>
+  <li>
+    October 13, 2020, by Jianjun Hu:
+    <br />
+    Removed the parameter <code>pre_y_start</code>, and made the initial output
+    to be equal to latch input when the clear input is <code>false</code>.
+    <br />
+    This is for
+    <a href=\"https://github.com/lbl-srg/modelica-buildings/issues/2177\">Buildings,
+      issue 2177</a>.
+  </li>
+  <li>
+    March 9, 2020, by Michael Wetter:
+    <br />
+    Simplified implementation, and made model work with OpenModelica.
+  </li>
+  <li>
+    April 4, 2019, by Jianjun Hu:
+    <br />
+    Corrected implementation that causes wrong output at initial stage. This
+    is for
+    <a href=\"https://github.com/lbl-srg/modelica-buildings/issues/1402\">Buildings,
+      issue 1402</a>.
+  </li>
+  <li>
+    December 1, 2017, by Michael Wetter:
+    <br />
+    Revised documentation.
+  </li>
+  <li>
+    March 30, 2017, by Jianjun Hu:
+    <br />
+    First implementation.
+  </li>
 </ul>
-</html>"));
+</html>
+"));
 end Latch;

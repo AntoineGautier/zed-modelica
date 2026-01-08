@@ -942,263 +942,283 @@ equation
 annotation(defaultComponentName="pla",
   Documentation(
     info="<html>
-<h4>
-Description
-</h4>
+<h4>Description</h4>
 <p>
-This template represents an air-to-water heat pump plant with closed-loop
-controls. While the heat pump plant configuration can be changed through
-parameters, the image below shows a typical configuration with two reversible
-air-to-water heat pumps, a primary-secondary distribution system and a
-sidestream heat recovery chiller. For a detailed schematic of the actual plant
-configuration, refer to the diagram view of the plant component. In Dymola, for
-example, you can access this by right-clicking the component <code>pla</code> in
-the model
-<a href=\"modelica://Buildings.Templates.Plants.HeatPumps.Validation.AirToWater\">
-Buildings.Templates.Plants.HeatPumps.Validation.AirToWater</a>
-and selecting \"Show Component\" from the context menu.
+  This template represents an air-to-water heat pump plant with closed-loop
+  controls. While the heat pump plant configuration can be changed through
+  parameters, the image below shows a typical configuration with two
+  reversible air-to-water heat pumps, a primary-secondary distribution system
+  and a sidestream heat recovery chiller. For a detailed schematic of the
+  actual plant configuration, refer to the diagram view of the plant
+  component. In Dymola, for example, you can access this by right-clicking the
+  component <code>pla</code> in the model
+  <a href=\"modelica://Buildings.Templates.Plants.HeatPumps.Validation.AirToWater\">
+    Buildings.Templates.Plants.HeatPumps.Validation.AirToWater</a> and
+  selecting \"Show Component\" from the context menu.
 </p>
 <p align=\"center\">
-<img alt=\"Image of heat pump plant\" src=\"modelica://Buildings/Resources/Images/Templates/Plants/HeatPumps/AirToWater.png\"/>
+  <img
+    alt=\"Image of heat pump plant\"
+    src=\"modelica://Buildings/Resources/Images/Templates/Plants/HeatPumps/AirToWater.png\"
+  />
 </p>
 <p>
-Currently, only identical heat pumps are supported. Although the template can
-accommodate any number of identical heat pumps, the graphical feedback for
-system configuration via the diagram layer is only accurate for up to 6
-devices.
+  Currently, only identical heat pumps are supported. Although the template
+  can accommodate any number of identical heat pumps, the graphical feedback
+  for system configuration via the diagram layer is only accurate for up to 6
+  devices.
 </p>
 <p>
-The supported plant configurations are enumerated in the table below. The first
-option displayed in bold characters corresponds to the default configuration. <br/>
+  The supported plant configurations are enumerated in the table below. The
+  first option displayed in bold characters corresponds to the default
+  configuration.
+  <br />
 </p>
 <table summary=\"summary\" border=\"1\">
-<tr>
-<th>Configuration parameter</th> <th>Options</th><th>Notes</th>
-</tr>
-<tr>
-<td>
-Function
-</td>
-<td>
-<b>Heating and cooling</b><br/>
-Heating-only
-</td>
-<td>
-The plant always provides heating hot water.<br/>
-Setting the parameter <code>have_chiWat</code> to true (default setting) allows
-modeling a plant that provides both heating hot water and chilled water.
-</td>
-</tr>
-<tr>
-<td>
-Heat recovery
-</td>
-<td>
-<b>Without sidestream heat recovery chiller </b><br/>
-With sidestream heat recovery chiller
-</td>
-<td>
-This option is only available for heating and cooling plants.When selected, the
-template includes a chiller and its associated dedicated primary CHW and CW
-pumps. The chiller is considered connected in a sidestream configuration to both
-the CHW return and the HW return.
-</td>
-</tr>
-<tr>
-<td>
-Type of distribution
-</td>
-<td>
-<b>Constant primary-variable secondary centralized</b><br/>
-Variable primary-only
-</td>
-<td>
-It is assumed that the HW and the CHW loops have the same type of distribution,
-as specified by this parameter.<br/>
-Most AWHPs on the market use a reverse cycle for defrosting. This requires
-maximum primary flow during defrost cycles. Consequently, variable primary
-plants commonly adopt a high minimum flow setpoint, typically close to the
-design flow rate, effectively operating akin to constant primary plants but with
-variable speed pumps controlling the loop differential pressure. While the flow
-rate directed towards the loads varies, the bypass valve control loop ensures a
-constant primary flow for a given number of staged units.<br/>
-\"Centralized secondary pumps\" refers to configurations with a single group of
-secondary pumps that is typically integrated into the plant.<br/>
-Distributed secondary pumps with multiple secondary loops served by dedicated
-secondary pumps are currently not supported.
-</td>
-</tr>
-<tr>
-<td>
-Type of primary pump arrangement
-</td>
-<td>
-<b> Dedicated</b><br/>
-Headered
-</td>
-<td>
-It is assumed that the HW and the CHW loops have the same type of primary pump
-arrangement, as specified by this parameter.
-</td>
-</tr>
-<tr>
-<td>
-Separate dedicated primary CHW pumps
-</td>
-<td>
-<b>False</b><br/>
-True
-</td>
-<td>
-This option is only available for heating and cooling plants with dedicated
-primary pumps. If this option is not selected (default setting), each AWHP uses
-a common dedicated primary pump for HW and CHW – this pump is then denoted as
-the primary HW pump. Otherwise, each AWHP relies on a separate dedicated HW pump
-and a separate dedicated CHW pump.
-</td>
-</tr>
-<tr>
-<td>
-Type of primary HW pumps
-</td>
-<td>
-<b>Variable speed</b><br/>
-Constant speed
-</td>
-<td>
-For constant primary-variable secondary distributions, the variable speed
-primary pumps are commanded at fixed speeds, determined during the Testing,
-Adjusting and Balancing phase to provide design AWHP flow in heating and cooling
-modes. The same intent is achieved with constant speed primary pumps through the
-use of balancing valves.
-</td>
-</tr>
-<tr>
-<td>
-Type of primary CHW pumps
-</td>
-<td>
-<b> Variable speed</b><br/>
-Constant speed
-</td>
-<td>
-See the note above on primary HW pumps.
-</td>
-</tr>
-<tr>
-<td>
-HW buffer tank
-</td>
-<td>
-<b>HW buffer tank in the primary supply</b><br/>
-HW buffer tank in the primary return<br/>
-No HW buffer tank
-</td>
-<td>
-By default, the HW buffer tank is considered integrated into the primary supply
-to mitigate the impact of defrost cycles on the temperature of the HW supplied
-to the loads. This assumes that the buffer tank is well-mixed. </br> The default
-sizing of the tank corresponds to <i>4</i> &nbsp;min of the design primary flow
-rate. This is based on manufacturer recommendations, which account for the fact
-that defrost cycles can take <i>3 </i> to <i>5</i>&nbsp;min to complete.
-</td>
-</tr>
-<tr>
-<td>
-CHW buffer tank
-</td>
-<td>
-<b>CHW buffer tank in the primary return</b><br/>
-CHW buffer tank in the primary supply<br/>
-No CHW buffer tank
-</td>
-<td>
-By default, the CHW buffer tank is considered integrated into the primary return
-to mitigate the impact of rapid load variations on the plant controls. This
-assumes that the buffer tank is well-mixed.</br> The default sizing of the tank
-corresponds to <i>2</i>&nbsp;min of the design primary flow rate, based on
-manufacturer recommendations.
-</td>
-</tr>
-<tr>
-<td>
-Controller
-</td>
-<td>
-<b>Closed-loop controls with supply temperature and differential pressure reset
-</b><br/>
-</td>
-<td>
-Most parts of the sequence of operation are similar to that described in ASHRAE,
-2021 for chiller plants.<br/>
-See the documentation of
-<a href=\"modelica://Buildings.Templates.Plants.Controls.HeatPumps.AirToWater\">
-Buildings.Templates.Plants.Controls.HeatPumps.AirToWater</a>
-for more details.<br/>
-An open loop controller is also available for validation purposes.
-</td>
-</tr>
+  <tr>
+    <th>Configuration parameter</th>
+    <th>Options</th>
+    <th>Notes</th>
+  </tr>
+  <tr>
+    <td>Function</td>
+    <td>
+      <b>Heating and cooling</b>
+      <br />
+      Heating-only
+    </td>
+    <td>
+      The plant always provides heating hot water.
+      <br />
+      Setting the parameter <code>have_chiWat</code> to true (default setting)
+      allows modeling a plant that provides both heating hot water and chilled
+      water.
+    </td>
+  </tr>
+  <tr>
+    <td>Heat recovery</td>
+    <td>
+      <b>Without sidestream heat recovery chiller</b>
+      <br />
+      With sidestream heat recovery chiller
+    </td>
+    <td>
+      This option is only available for heating and cooling plants.When
+      selected, the template includes a chiller and its associated dedicated
+      primary CHW and CW pumps. The chiller is considered connected in a
+      sidestream configuration to both the CHW return and the HW return.
+    </td>
+  </tr>
+  <tr>
+    <td>Type of distribution</td>
+    <td>
+      <b>Constant primary-variable secondary centralized</b>
+      <br />
+      Variable primary-only
+    </td>
+    <td>
+      It is assumed that the HW and the CHW loops have the same type of
+      distribution, as specified by this parameter.
+      <br />
+      Most AWHPs on the market use a reverse cycle for defrosting. This
+      requires maximum primary flow during defrost cycles. Consequently,
+      variable primary plants commonly adopt a high minimum flow setpoint,
+      typically close to the design flow rate, effectively operating akin to
+      constant primary plants but with variable speed pumps controlling the
+      loop differential pressure. While the flow rate directed towards the
+      loads varies, the bypass valve control loop ensures a constant primary
+      flow for a given number of staged units.
+      <br />
+      \"Centralized secondary pumps\" refers to configurations with a single
+      group of secondary pumps that is typically integrated into the plant.
+      <br />
+      Distributed secondary pumps with multiple secondary loops served by
+      dedicated secondary pumps are currently not supported.
+    </td>
+  </tr>
+  <tr>
+    <td>Type of primary pump arrangement</td>
+    <td>
+      <b>Dedicated</b>
+      <br />
+      Headered
+    </td>
+    <td>
+      It is assumed that the HW and the CHW loops have the same type of
+      primary pump arrangement, as specified by this parameter.
+    </td>
+  </tr>
+  <tr>
+    <td>Separate dedicated primary CHW pumps</td>
+    <td>
+      <b>False</b>
+      <br />
+      True
+    </td>
+    <td>
+      This option is only available for heating and cooling plants with
+      dedicated primary pumps. If this option is not selected (default
+      setting), each AWHP uses a common dedicated primary pump for HW and CHW
+      – this pump is then denoted as the primary HW pump. Otherwise, each AWHP
+      relies on a separate dedicated HW pump and a separate dedicated CHW
+      pump.
+    </td>
+  </tr>
+  <tr>
+    <td>Type of primary HW pumps</td>
+    <td>
+      <b>Variable speed</b>
+      <br />
+      Constant speed
+    </td>
+    <td>
+      For constant primary-variable secondary distributions, the variable
+      speed primary pumps are commanded at fixed speeds, determined during the
+      Testing, Adjusting and Balancing phase to provide design AWHP flow in
+      heating and cooling modes. The same intent is achieved with constant
+      speed primary pumps through the use of balancing valves.
+    </td>
+  </tr>
+  <tr>
+    <td>Type of primary CHW pumps</td>
+    <td>
+      <b>Variable speed</b>
+      <br />
+      Constant speed
+    </td>
+    <td>See the note above on primary HW pumps.</td>
+  </tr>
+  <tr>
+    <td>HW buffer tank</td>
+    <td>
+      <b>HW buffer tank in the primary supply</b>
+      <br />
+      HW buffer tank in the primary return
+      <br />
+      No HW buffer tank
+    </td>
+    <td>
+      By default, the HW buffer tank is considered integrated into the primary
+      supply to mitigate the impact of defrost cycles on the temperature of
+      the HW supplied to the loads. This assumes that the buffer tank is
+      well-mixed.
+      <br />
+      The default sizing of the tank corresponds to
+      <i>4</i>
+      &nbsp;min of the design primary flow rate. This is based on manufacturer
+      recommendations, which account for the fact that defrost cycles can take
+      <i>3</i>
+      to
+      <i>5</i>
+      &nbsp;min to complete.
+    </td>
+  </tr>
+  <tr>
+    <td>CHW buffer tank</td>
+    <td>
+      <b>CHW buffer tank in the primary return</b>
+      <br />
+      CHW buffer tank in the primary supply
+      <br />
+      No CHW buffer tank
+    </td>
+    <td>
+      By default, the CHW buffer tank is considered integrated into the
+      primary return to mitigate the impact of rapid load variations on the
+      plant controls. This assumes that the buffer tank is well-mixed.
+      <br />
+      The default sizing of the tank corresponds to
+      <i>2</i>
+      &nbsp;min of the design primary flow rate, based on manufacturer
+      recommendations.
+    </td>
+  </tr>
+  <tr>
+    <td>Controller</td>
+    <td>
+      <b>
+        Closed-loop controls with supply temperature and differential pressure
+        reset
+      </b>
+      <br />
+    </td>
+    <td>
+      Most parts of the sequence of operation are similar to that described in
+      ASHRAE, 2021 for chiller plants.
+      <br />
+      See the documentation of
+      <a href=\"modelica://Buildings.Templates.Plants.Controls.HeatPumps.AirToWater\">
+        Buildings.Templates.Plants.Controls.HeatPumps.AirToWater</a> for more details.
+      <br />
+      An open loop controller is also available for validation purposes.
+    </td>
+  </tr>
 </table>
-<h4>
-Control points
-</h4>
+<h4>Control points</h4>
 <p>
-The control sequence implemented in this template requires the external input
-points specified in the documentation of the controller
-<a href=\"modelica://Buildings.Templates.Plants.HeatPumps.Components.Controls.AirToWater\">
-Buildings.Templates.Plants.HeatPumps.Components.Controls.AirToWater</a>.
-<h4>
-Implementation details
-</h4>
+  The control sequence implemented in this template requires the external
+  input points specified in the documentation of the controller
+  
+  <a href=\"modelica://Buildings.Templates.Plants.HeatPumps.Components.Controls.AirToWater\">
+    Buildings.Templates.Plants.HeatPumps.Components.Controls.AirToWater</a>.
+</p>
+
+<h4>Implementation details</h4>
 <p>
-The pressure drops of the heat pump CHW and HW heat exchangers are calculated
-within the isolation valve component <code>valIso
-</code> based on lumped flow
-coefficients for the sake of computational efficiency.
+  The pressure drops of the heat pump CHW and HW heat exchangers are
+  calculated within the isolation valve component <code>valIso
+</code> based
+  on lumped flow coefficients for the sake of computational efficiency.
 </p>
 <p>
-The template uses a heat pump model that interpolates capacity and power from
-manufacturer data along the CHW/HW temperature, the outdoor air temperature and
-the part load ratio. The heat pump performance data are provided via the
-subrecords <code>dat.hp.perHeaHp</code> and <code>
-dat.hp.perCooHp</code> for
-the heating mode and the cooling mode, respectively. For the required format of
-the performance data files, please refer to the documentation of the block
-<a href=\"modelica://Buildings.Fluid.HeatPumps.ModularReversible.RefrigerantCycle.BaseClasses.TableData2DLoadDep\">
-Buildings.Fluid.HeatPumps.ModularReversible.RefrigerantCycle.BaseClasses.TableData2DLoadDep</a>.
+  The template uses a heat pump model that interpolates capacity and power
+  from manufacturer data along the CHW/HW temperature, the outdoor air
+  temperature and the part load ratio. The heat pump performance data are
+  provided via the subrecords <code>dat.hp.perHeaHp</code> and <code>
+dat.hp.perCooHp</code>
+  for the heating mode and the cooling mode, respectively. For the required
+  format of the performance data files, please refer to the documentation of
+  the block
+  <a href=\"modelica://Buildings.Fluid.HeatPumps.ModularReversible.RefrigerantCycle.BaseClasses.TableData2DLoadDep\">
+    Buildings.Fluid.HeatPumps.ModularReversible.RefrigerantCycle.BaseClasses.TableData2DLoadDep</a>.
 </p>
-<h4>
-References
-</h4>
+<h4>References</h4>
 <ul>
-<li id=\"ASHRAE2021\">
-ASHRAE, 2021. Guideline 36-2021, High-Performance Sequences of Operation for
-HVAC Systems. Atlanta, GA.
-</li>
+  <li id=\"ASHRAE2021\">
+    ASHRAE, 2021. Guideline 36-2021, High-Performance Sequences of Operation
+    for HVAC Systems. Atlanta, GA.
+  </li>
 </ul>
-</html>",
+</html>
+",
     revisions="<html>
 <ul>
-<li>
-August 21, 2025, by Antoine Gautier:<br/>
-Refactored with load-dependent 2D table data heat pump model.<br/>
-This is for
-<a href=\"https://github.com/lbl-srg/modelica-buildings/issues/4152\">#4152</a> .
-</li>
-<li>
-May 31, 2024, by Antoine Gautier:<br/>
-Added sidestream heat recovery chiller, primary-only pumping, buffer tanks,
-failsafe staging conditions and internal computation of pump speed or balancing
-valve ∆p to meet design flow. <br/>
-This is for
-<a href=\"https://github.com/lbl-srg/modelica-buildings/issues/3808\"> #3808</a> .
-</li>
-<li>
-March 29, 2024, by Antoine Gautier:<br/>
-First implementation.
-</li>
+  <li>
+    August 21, 2025, by Antoine Gautier:
+    <br />
+    Refactored with load-dependent 2D table data heat pump model.
+    <br />
+    This is for
+    <a href=\"https://github.com/lbl-srg/modelica-buildings/issues/4152\">#4152</a>.
+  </li>
+  <li>
+    May 31, 2024, by Antoine Gautier:
+    <br />
+    Added sidestream heat recovery chiller, primary-only pumping, buffer
+    tanks, failsafe staging conditions and internal computation of pump speed
+    or balancing valve ∆p to meet design flow.
+    <br />
+    This is for
+    <a href=\"https://github.com/lbl-srg/modelica-buildings/issues/3808\"> #3808</a>.
+  </li>
+  <li>
+    March 29, 2024, by Antoine Gautier:
+    <br />
+    First implementation.
+  </li>
 </ul>
-</html>"),
+</html>
+"),
   Diagram(graphics={Polygon(points={{560,80},{560,44},{561,44},{561,80}},
     lineColor={0,0,0},
     visible=have_chiWat and not ctl.have_senDpChiWatRemWir),

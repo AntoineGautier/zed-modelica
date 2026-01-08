@@ -11,7 +11,7 @@ import type {
   SupportOption,
 } from "prettier";
 import { parse as parseModelica, ASTNode } from "./parser.js";
-import { printModelica } from "./printer.js";
+import { printModelica, embedHTML } from "./printer.js";
 
 // Language definition
 const languages: SupportLanguage[] = [
@@ -42,10 +42,11 @@ const parsers: Record<string, Parser> = {
   },
 };
 
-// Printer definition with post-processing
+// Printer definition with embed support for HTML formatting
 const printers: Record<string, Printer<ASTNode>> = {
   "modelica-ast": {
     print: printModelica,
+    embed: embedHTML,
   },
 };
 

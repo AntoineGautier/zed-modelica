@@ -338,7 +338,10 @@ function formatBlockComment(text: string): Doc {
   while (contentLines.length > 0 && contentLines[0] === "") {
     contentLines.shift();
   }
-  while (contentLines.length > 0 && contentLines[contentLines.length - 1] === "") {
+  while (
+    contentLines.length > 0 &&
+    contentLines[contentLines.length - 1] === ""
+  ) {
     contentLines.pop();
   }
 
@@ -3094,4 +3097,92 @@ function extractOperator(
 function endsWithDot(parts: Doc[]): boolean {
   const last = parts[parts.length - 1];
   return typeof last === "string" && last.endsWith(".");
+}
+
+// Track reported HTML errors to prevent duplication
+const reportedHTMLErrors = new Set<string>();
+
+/**
+ * Embed function for Prettier HTML formatter integration
+ * This allows HTML in Modelica annotations to be formatted using Prettier's built-in HTML parser
+ */
+export function embedHTML(path: AstPath<ASTNode>, _options: any) {
+  const node = path.getValue();
+
+  // Only process STRING nodes that contain HTML in annotations
+  if (node.type !== "STRING") {
+    return null;
+  }
+
+  const text = node.text ?? "";
+  if (!text.includes("<html>")) {
+    return null;
+  }
+
+  // Check if we're inside an annotation
+  if (!isInsideAnnotation(path)) {
+    return null;
+  }
+
+  // Extract string content (remove outer quotes)
+  const match = text.match(/^"(.*)"$/s);
+  if (!match) {
+    return null;
+  }
+
+  const htmlContent = match[1];
+
+  // Return an async function that Prettier will call
+  return async (
+    _textToDoc: (text: string, options: any) => Promise<Doc>,
+    _print: (path: AstPath<ASTNode>) => Doc,
+    _path: AstPath<ASTNode>,
+    opts: any,
+  ): Promise<Doc | undefined> => {
+    try {
+      // Step 1: Prepare HTML (extract preserved blocks, de-escape quotes)
+      const { prepareHTMLForPrettier, postProcessHTMLFromPrettier } =
+        await import("./html-embed-formatter.js");
+      const { processedHtml, preservedBlocks } = prepareHTMLForPrettier(
+        htmlContent,
+        DEFAULT_PRESERVED_TAGS,
+      );
+
+      // Step 2: Format with Prettier's HTML parser
+      const prettier = await import("prettier");
+      const formattedHtml = await prettier.default.format(processedHtml, {
+        parser: "html",
+        printWidth: opts.printWidth || 80,
+        htmlWhitespaceSensitivity: "ignore",
+      });
+
+      // Step 3: Post-process (restore preserved blocks, re-escape quotes)
+      const finalHtml = postProcessHTMLFromPrettier(
+        formattedHtml,
+        preservedBlocks,
+      );
+
+      // Step 4: Return as a Doc (string wrapped in quotes)
+      return `"${finalHtml}"`;
+    } catch (error) {
+      // Write clear error message to stderr (deduplicated)
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
+      const errorKey = `${htmlContent.substring(0, 100)}:${errorMessage.substring(0, 100)}`;
+
+      // Only report each unique error once
+      if (!reportedHTMLErrors.has(errorKey)) {
+        reportedHTMLErrors.add(errorKey);
+
+        console.error("\n" + "=".repeat(80));
+        console.error("ERROR: HTML formatting failed in Modelica annotation");
+        console.error("=".repeat(80));
+        console.error(errorMessage);
+        console.error("\n" + "=".repeat(80));
+      }
+
+      // Throw error to stop formatting completely
+      throw new Error(`HTML formatting failed: ${errorMessage}`);
+    }
+  };
 }

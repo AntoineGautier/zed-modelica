@@ -6,8 +6,8 @@ model ReplaceableComments
     annotation(Dialog(enable=have_chiWat),
       __ctrlFlow(enable=false));
   /*
-Derived classes representing AWHP shall use:
-redeclare final package MediumSou = MediumAir
+   * Derived classes representing AWHP shall use:
+   * redeclare final package MediumSou = MediumAir
    */
   replaceable package MediumSou = Buildings.Media.Water
     constrainedby Modelica.Media.Interfaces.PartialMedium

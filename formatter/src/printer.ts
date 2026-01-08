@@ -288,6 +288,81 @@ function formatTrailingDescription(doc: Doc, inChoices: boolean = false): Doc {
 }
 
 /**
+ * Formats a block comment in prettier-style with aligned asterisks.
+ * Transforms block comments to have:
+ * - Opening /* on its own line (for multi-line comments)
+ * - Each content line prefixed with " * " with aligned asterisks
+ * - Closing * / on its own line with aligned asterisk
+ *
+ * Single-line comments (/* text * /) are left unchanged.
+ *
+ * Returns a Doc so that prettier can properly handle indentation of
+ * multi-line comments (raw strings with \n don't get indented).
+ *
+ * @param text - The raw block comment text including /* and * /
+ * @returns Formatted block comment as a Doc
+ */
+function formatBlockComment(text: string): Doc {
+  // Check if it's a single-line block comment (no newlines in content)
+  const content = text.slice(2, -2); // Remove /* and */
+  if (!content.includes("\n")) {
+    // Single-line comment: ensure proper spacing
+    const trimmed = content.trim();
+    if (trimmed.length === 0) {
+      return "/* */";
+    }
+    return `/* ${trimmed} */`;
+  }
+
+  // Multi-line comment: format with aligned asterisks
+  const lines = content.split("\n");
+
+  // Process each line to extract content (removing existing * prefixes if any)
+  const contentLines: string[] = [];
+  for (const line of lines) {
+    // Remove leading whitespace and optional * prefix
+    let trimmed = line.trimStart();
+    if (trimmed.startsWith("*") && !trimmed.startsWith("*/")) {
+      // Remove the leading * and any following space
+      trimmed = trimmed.slice(1);
+      if (trimmed.startsWith(" ")) {
+        trimmed = trimmed.slice(1);
+      }
+    }
+    // Trim trailing whitespace
+    trimmed = trimmed.trimEnd();
+    contentLines.push(trimmed);
+  }
+
+  // Remove empty lines at the beginning and end of content
+  while (contentLines.length > 0 && contentLines[0] === "") {
+    contentLines.shift();
+  }
+  while (contentLines.length > 0 && contentLines[contentLines.length - 1] === "") {
+    contentLines.pop();
+  }
+
+  // If no content left, return minimal comment
+  if (contentLines.length === 0) {
+    return "/* */";
+  }
+
+  // Build the formatted comment as a Doc array with hardlines
+  // This allows prettier to properly indent multi-line comments
+  const docParts: Doc[] = ["/*"];
+  for (const contentLine of contentLines) {
+    if (contentLine === "") {
+      docParts.push(hardline, " *");
+    } else {
+      docParts.push(hardline, ` * ${contentLine}`);
+    }
+  }
+  docParts.push(hardline, " */");
+
+  return docParts;
+}
+
+/**
  * Determines if an if-expression appears "mid-line" - i.e., after something
  * on the same line like `name=if ...` or `arg=if ...`.
  *
@@ -623,7 +698,11 @@ export const printModelica: Printer<ASTNode>["print"] = (
       return text;
     }
 
-    case "BLOCK_COMMENT":
+    case "BLOCK_COMMENT": {
+      const text = node.text ?? "";
+      return formatBlockComment(text);
+    }
+
     case "comment":
       return node.text ?? "";
 

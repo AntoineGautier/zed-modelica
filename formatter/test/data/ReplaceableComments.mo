@@ -8,7 +8,7 @@ model ReplaceableComments
   /*
 Derived classes representing AWHP shall use:
 redeclare final package MediumSou = MediumAir
-*/
+   */
   replaceable package MediumSou = Buildings.Media.Water
     constrainedby Modelica.Media.Interfaces.PartialMedium
     "Source-side medium"

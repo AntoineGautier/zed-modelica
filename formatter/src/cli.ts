@@ -184,7 +184,7 @@ async function run() {
     // Write mode - write to file (only if idempotent)
     if (writeOutput || outputFile) {
       // If --check wasn't used, still verify idempotence before writing
-      if (!check && !isIdempotent) {
+      if (check && !isIdempotent) {
         console.error("✗ Idempotence check failed!");
         console.error(
           "Original and formatted content differ (ignoring whitespace).",

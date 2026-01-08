@@ -1314,7 +1314,13 @@ export const printModelica: Printer<ASTNode>["print"] = (
         // Don't break after =, only allow breaking between value and description
         for (let i = 0; i < node.children.length; i++) {
           const child = node.children[i];
-          if (child.type === "name") {
+          if (child.type === "each") {
+            // Handle 'each' keyword
+            parts.push(path.call(print, "children", i), " ");
+          } else if (child.type === "final") {
+            // Handle 'final' keyword
+            parts.push(path.call(print, "children", i), " ");
+          } else if (child.type === "name") {
             parts.push(path.call(print, "children", i));
           } else if (child.type === "modification") {
             parts.push(path.call(print, "children", i));
@@ -1331,7 +1337,13 @@ export const printModelica: Printer<ASTNode>["print"] = (
 
       for (let i = 0; i < node.children.length; i++) {
         const child = node.children[i];
-        if (child.type === "name") {
+        if (child.type === "each") {
+          // Handle 'each' keyword
+          parts.push(path.call(print, "children", i), " ");
+        } else if (child.type === "final") {
+          // Handle 'final' keyword
+          parts.push(path.call(print, "children", i), " ");
+        } else if (child.type === "name") {
           parts.push(path.call(print, "children", i));
         } else if (child.type === "modification") {
           parts.push(path.call(print, "children", i));
@@ -2898,15 +2910,22 @@ function extractModificationPrefix(node: ASTNode): string {
   const firstChild = node.children[0];
   if (!firstChild) return "";
 
+  const startRow = node.range.start.row;
   const startCol = node.range.start.column;
+  const childStartRow = firstChild.range.start.row;
   const childStartCol = firstChild.range.start.column;
 
-  if (
-    node.range.start.row === firstChild.range.start.row &&
-    childStartCol > startCol
-  ) {
+  if (startRow === childStartRow) {
+    // Same line - extract text between node start and first child start
+    if (childStartCol > startCol) {
+      const lines = text.split("\n");
+      const prefixText = lines[0].substring(0, childStartCol - startCol).trim();
+      return prefixText;
+    }
+  } else {
+    // Different lines - first line contains the prefix (final/each)
     const lines = text.split("\n");
-    const prefixText = lines[0].substring(0, childStartCol - startCol).trim();
+    const prefixText = lines[0].trim();
     return prefixText;
   }
 

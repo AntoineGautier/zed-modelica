@@ -1,20 +1,14 @@
 # Zed Modelica Extension
 
-To update:
+A [Zed](https://zed.dev/) extension that provides syntax highlighting for the [Modelica](https://modelica.org/) language. This extension is highlighting-only: it does not provide an LSP, formatter, or other language features.
 
-```
-cd grammars/modelica
-git pull
-tree-sitter generate
-```
+## Grammar
 
-This will create/update `grammars/modelica/src`.
+`grammars/modelica` is not tracked in this repo (see `.gitignore`). It's a clone Zed creates automatically at extension install/rebuild, of the repository specified in `extension.toml`'s `[grammars.modelica]` section, checked out at the pinned `rev`.
 
-Then update commit hash in `extension.toml`.
+## Known Issues
 
-Then rebuild (or reinstall) with Zed. This will create/update `grammars/modelica.wasm`.
-
-## Notes Regarding Zed Integration
+### `brackets.scm` breaks highlighting
 
 Including the file `languages/modelica/brackets.scm` breaks syntax highlighting.
 

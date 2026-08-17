@@ -1,3 +1,0 @@
-[submodule "grammars/tree-sitter-modelica"]
-	path = grammars/tree-sitter-modelica
-	url = git@github.com:AntoineGautier/tree-sitter-modelica.git

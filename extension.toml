@@ -3,9 +3,13 @@ name = "Modelica"
 version = "0.0.1"
 schema_version = 1
 authors = ["Antoine Gautier <agautier@solamen.fr>"]
-description = "Highlighting for Modelica language"
+description = "Modelica language support"
 repository = "https://github.com/AntoineGautier/zed-modelica"
 
 [grammars.modelica]
 repository = "https://github.com/OpenModelica/tree-sitter-modelica"
 rev = "d0f863219f6419ed676f47f4845475d1649ee18a"
+
+[language_servers.modelica-language-server]
+name = "Modelica Language Server"
+language = "Modelica"

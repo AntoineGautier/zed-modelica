@@ -4,7 +4,7 @@ A [Zed](https://zed.dev/) extension that provides syntax highlighting, language 
 
 ## Language Server
 
-On first use, the extension installs [`@openmodelica/modelica-language-server`](https://github.com/OpenModelica/modelica-language-server) from npm and runs it over stdio. As of this writing, the server provides hover, go to declaration/definition, and document symbols (outline); it does not yet provide completion, diagnostics, or formatting.
+The extension runs [`@openmodelica/modelica-language-server`](https://github.com/OpenModelica/modelica-language-server) over stdio. As of this writing, the server provides hover, go to declaration/definition, and document symbols (outline); it does not yet provide completion, diagnostics, or formatting.
 
 ## Formatter
 
@@ -70,7 +70,7 @@ Typical paths:
 | macOS    | `~/.openmodelica/libraries/`            |
 
 The server loads all configured libraries at startup. Changes take effect
-after restarting the language server (**zed: restart language server**).
+after restarting the language server (**editor: restart language server**).
 
 ## Grammar
 

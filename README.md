@@ -76,6 +76,19 @@ after restarting the language server (**editor: restart language server**).
 
 `grammars/modelica` is not tracked in this repo (see `.gitignore`). It's a clone Zed creates automatically at extension install/rebuild, of the repository specified in `extension.toml`'s `[grammars.modelica]` section, checked out at the pinned `rev`.
 
+## Licensing
+
+This extension's own code is MIT-licensed (see `LICENSE`). At install/build
+and runtime it fetches two separate components from the Open Source Modelica
+Consortium (OSMC), each dual-licensed under AGPL-3.0-only or OSMC-PL-1.8:
+
+- [`tree-sitter-modelica`](https://github.com/OpenModelica/tree-sitter-modelica) (grammar, cloned per `extension.toml`'s pinned `rev`)
+- [`@openmodelica/modelica-language-server`](https://github.com/OpenModelica/modelica-language-server) (language server, npm-installed and run as a separate process over stdio)
+
+Neither is vendored in this repository; they are pulled from their own
+upstream sources under their own terms and are not relicensed by this
+extension.
+
 ## Known Issues
 
 ### `brackets.scm` breaks highlighting

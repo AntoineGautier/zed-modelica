@@ -12,4 +12,4 @@ rev = "96eebbdcc6a2a05c0d5769a2c4cf23eb84ac7bed"
 
 [language_servers.modelica-language-server]
 name = "Modelica Language Server"
-language = "Modelica"
+languages = ["Modelica"]

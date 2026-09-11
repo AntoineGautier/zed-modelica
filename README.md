@@ -6,6 +6,13 @@ A [Zed](https://zed.dev/) extension that provides syntax highlighting, language 
 
 The extension runs [`@openmodelica/modelica-language-server`](https://github.com/OpenModelica/modelica-language-server) over stdio. As of this writing, the server provides hover, go to declaration/definition, and document symbols (outline); it does not yet provide completion, diagnostics, or formatting.
 
+The extension installs the server from npm on first use and checks for a
+newer release once per Zed session thereafter.
+If the npm registry can't be reached and a copy is already installed, the
+extension reuses it rather than failing startup; on a first install, with
+nothing on disk yet to fall back to, an unreachable registry does fail
+startup.
+
 ## Formatter
 
 Formatting uses Zed's built-in Prettier integration together with

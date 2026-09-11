@@ -8,7 +8,7 @@ repository = "https://github.com/AntoineGautier/zed-modelica"
 
 [grammars.modelica]
 repository = "https://github.com/OpenModelica/tree-sitter-modelica"
-rev = "96eebbdcc6a2a05c0d5769a2c4cf23eb84ac7bed"
+rev = "ee57ebfeedc515933d1dc4d41a5bc6af2f092afa"
 
 [language_servers.modelica-language-server]
 name = "Modelica Language Server"

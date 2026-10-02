@@ -79,6 +79,27 @@ Typical paths:
 The server loads all configured libraries at startup. Changes take effect
 after restarting the language server (**editor: restart language server**).
 
+## Rainbow Brackets
+
+`languages/modelica/brackets.scm` defines the `()`, `[]` and `{}` pairs used
+for bracket matching and colorization. Colorization is off by default in Zed;
+enable it in your settings:
+
+```json
+{
+  "languages": {
+    "Modelica": {
+      "colorize_brackets": true
+    }
+  }
+}
+```
+
+String quotes are deliberately not listed in `brackets.scm`: the grammar lexes
+a whole string as a single `STRING` token, so `"` is not a node type and a
+`("\"" @open "\"" @close)` pattern fails to compile. Zed then fails to load
+the whole language, which disables syntax highlighting too.
+
 ## Grammar
 
 `grammars/modelica` is not tracked in this repo (see `.gitignore`). It's a clone Zed creates automatically at extension install/rebuild, of the repository specified in `extension.toml`'s `[grammars.modelica]` section, checked out at the pinned `rev`.
@@ -95,21 +116,3 @@ Consortium (OSMC), each dual-licensed under AGPL-3.0-only or OSMC-PL-1.8:
 Neither is vendored in this repository; they are pulled from their own
 upstream sources under their own terms and are not relicensed by this
 extension.
-
-## Known Issues
-
-### `brackets.scm` breaks highlighting
-
-Including the file `languages/modelica/brackets.scm` breaks syntax highlighting.
-
-**Root cause (?)**: The WASM-compiled tree-sitter parser outputs **only named nodes**, while native Node bindings output **both named and unnamed nodes**.
-Since bracket tokens (`(`, `)`, `{`, `}`, `[`, `]`) are anonymous/unnamed nodes in tree-sitter, they are not accessible when using the WASM parser that Zed uses.
-
-This explains why:
-- The `tree-sitter query` CLI works (uses native bindings)
-- Bracket captures in `highlights.scm` don't actually match anything (but don't break highlighting)
-- Adding `brackets.scm` breaks highlighting (Zed may handle query failures differently for bracket queries)
-
-**Workaround**: Bracket auto-closing is configured in `config.toml` and works without `brackets.scm`. However, rainbow brackets and bracket-pair highlighting are not available.
-
-**Potential fix**: The Modelica grammar would need to be modified to expose bracket tokens as named nodes, which would require changes to `grammar.js` in the upstream tree-sitter-modelica repository.
